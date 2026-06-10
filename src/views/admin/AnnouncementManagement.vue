@@ -151,26 +151,7 @@ const getTypeTagType = (type) => {
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
-  // 直接从字符串提取日期时间，避免 new Date() 时区偏移
-  const s = String(dateStr)
-  let y, m, d, h = '00', min = '00'
-  if (s.includes('T') || s.includes(' ')) {
-    const datePart = s.split('T')[0].split(' ')[0]
-    const timeRaw = s.includes('T')
-      ? (s.split('T')[1] || '').split('.')[0]
-      : (s.split(' ')[1] || '').split('.')[0]
-    ;[y, m, d] = datePart.split('-').map(Number)
-    if (timeRaw) {
-      const parts = timeRaw.split(':')
-      h = String(Number(parts[0]) % 24).padStart(2, '0')
-      min = String(Number(parts[1]) || 0).padStart(2, '0')
-    }
-  } else {
-    const d2 = new Date(s)
-    y = d2.getFullYear(); m = d2.getMonth() + 1; d = d2.getDate()
-    h = String(d2.getHours()).padStart(2, '0'); min = String(d2.getMinutes()).padStart(2, '0')
-  }
-  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')} ${h}:${min}`
+  return String(dateStr).slice(0, 16).replace('T', ' ')
 }
 
 const fetchData = async () => {

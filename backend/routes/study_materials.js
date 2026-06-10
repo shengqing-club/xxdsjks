@@ -62,6 +62,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const uploaderName = req.user.name || uploaderId
     const uploaderRole = req.user.studentId ? 'student' : 'admin'
 
+    // 修复 multer 中文文件名编码问题：originalname 可能按 Latin-1 解码了 UTF-8 字节
+    let originalName = req.file.originalname
+    try {
+      originalName = Buffer.from(originalName, 'latin1').toString('utf8')
+    } catch { /* 如果转码失败则保持原样 */ }
+
     const result = await pool.query(
       `INSERT INTO study_materials
         (title, file_url, file_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, file_data)
@@ -69,8 +75,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
        RETURNING *`,
       [
         title,
-        `stored-in-db://${req.file.originalname}`,
-        req.file.originalname,
+        `stored-in-db://${originalName}`,
+        originalName,
         req.file.size,
         req.file.mimetype,
         course_name || null,
@@ -121,7 +127,9 @@ router.get('/download/:id', async (req, res) => {
     }
 
     res.setHeader('Content-Type', material.file_type || 'application/octet-stream')
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(material.file_name)}`)
+    // RFC 6266: ASCII 回退 + UTF-8 编码文件名
+    const encodedName = encodeURIComponent(material.file_name || 'download').replace(/['()]/g, escape)
+    res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
     res.setHeader('Content-Length', material.file_size)
     res.send(material.file_data)
   } catch (e) {

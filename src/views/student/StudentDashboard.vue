@@ -121,6 +121,12 @@ const getAnnouncementTagType = (type) => {
   return map[type] || 'info'
 }
 
+// 将时间转为北京时间显示
+const formatTime = (dateStr) => {
+  if (!dateStr) return ''
+  return String(dateStr).slice(0, 16).replace('T', ' ')
+}
+
 const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
 const weekDays = ['日', '一', '二', '三', '四', '五', '六']
 const weekday = weekDays[now.getDay()]
@@ -161,16 +167,28 @@ const handleDownload = async (material) => {
   try {
     ElMessage.info('正在下载，请稍候...')
     const res = await downloadStudyMaterial(material.id)
-    // axios 设置 responseType: 'blob' 后，res.data 就是 Blob
+    // 尝试从 Content-Disposition 响应头提取 UTF-8 编码的文件名
     const blob = res.data
     if (!blob || blob.size === 0) {
       ElMessage.error('下载失败：文件内容为空')
       return
     }
+    let fileName = ''
+    const disposition = res.headers?.['content-disposition'] || ''
+    const utf8Match = disposition.match(/filename\*=(?:UTF-8|utf-8)''(.+?)(?:;|$)/)
+    if (utf8Match) {
+      try { fileName = decodeURIComponent(utf8Match[1].trim()) } catch {}
+    }
+    if (!fileName) {
+      const plainMatch = disposition.match(/filename="?([^";]+)"?/)
+      if (plainMatch) fileName = plainMatch[1].trim()
+    }
+    if (!fileName) fileName = material.file_name || material.title || 'download'
+
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = material.file_name || material.title || 'download'
+    a.download = fileName
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -408,7 +426,7 @@ onMounted(async () => {
             <span class="ann-title">{{ item.title }}</span>
             <el-tag v-if="!item.is_read" type="danger" size="small" effect="dark" class="unread-dot">未读</el-tag>
           </div>
-          <span class="ann-date">{{ item.time ? item.time.slice(0, 16).replace('T', ' ') : '' }}</span>
+          <span class="ann-date">{{ formatTime(item.time) }}</span>
         </div>
       </div>
       <el-empty v-else description="暂无通知" :image-size="60" />

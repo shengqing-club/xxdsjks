@@ -185,6 +185,12 @@ const updateDateTime = () => {
 
 const formatDate = (dateStr) => {
   if (!dateStr) return ''
+  // 直接从字符串提取日期部分，兼容 "YYYY-MM-DD HH:MM:SS" 和 ISO 格式
+  const datePart = String(dateStr).split('T')[0].split(' ')[0]
+  const parts = datePart.split('-')
+  if (parts.length === 3) {
+    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
+  }
   const d = new Date(dateStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
