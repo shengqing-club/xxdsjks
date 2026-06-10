@@ -1,15 +1,22 @@
 <template>
   <div class="pie-chart-page">
-    <!-- Page Header -->
     <div class="page-header">
       <h2 class="page-title">数据可视化 - 饼图</h2>
-      <p class="page-desc">学生性别比例分布情况</p>
+      <p class="page-desc">学生性别比例 · 课程类型分布</p>
     </div>
 
-    <!-- Chart Card -->
-    <el-card shadow="never" class="chart-card" v-loading="loading">
-      <div ref="chartRef" class="chart-container"></div>
-    </el-card>
+    <el-row :gutter="20">
+      <el-col :span="12">
+        <el-card shadow="never" class="chart-card" v-loading="loadingGender">
+          <div ref="genderChartRef" class="chart-container"></div>
+        </el-card>
+      </el-col>
+      <el-col :span="12">
+        <el-card shadow="never" class="chart-card" v-loading="loadingCourse">
+          <div ref="courseChartRef" class="chart-container"></div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -17,157 +24,78 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
 import { getGenderStats } from '../../api/student'
+import { getCourseTypeStats } from '../../api/grade'
 
-const loading = ref(false)
-const chartRef = ref(null)
-let chartInstance = null
+const loadingGender = ref(false)
+const loadingCourse = ref(false)
+const genderChartRef = ref(null)
+const courseChartRef = ref(null)
+let genderChart = null
+let courseChart = null
 
-const initChart = (data) => {
-  if (!chartRef.value) return
-  chartInstance = echarts.init(chartRef.value)
+const makePieOption = (title, data, colorMap) => ({
+  title: { text: title, left: 'center', top: 12, textStyle: { fontSize: 16, fontWeight: 600, color: '#1e293b' } },
+  tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+  legend: { bottom: 10, left: 'center', itemWidth: 10, itemHeight: 10, textStyle: { color: '#64748b', fontSize: 12 } },
+  series: [{
+    type: 'pie', radius: ['42%', '68%'], center: ['50%', '48%'],
+    itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+    label: { show: true, formatter: '{b}\n{d}%', fontSize: 12, color: '#334155' },
+    emphasis: { scaleSize: 6, label: { fontSize: 14, fontWeight: 600 } },
+    data: data.map(d => ({ name: (colorMap[d.name] || d).label || d.name, value: Number(d.value), itemStyle: { color: (colorMap[d.name] || d).color || '#3b82f6' } }))
+  }]
+})
 
-  const pieData = Object.keys(data).map((key) => ({
-    name: key === '男' ? '男生' : '女生',
-    value: data[key]
-  }))
-
-  const colorMap = {
-    '男生': '#3b82f6',
-    '女生': '#f472b6'
-  }
-
-  const option = {
-    title: {
-      text: '学生性别比例分布',
-      left: 'center',
-      top: 16,
-      textStyle: {
-        fontSize: 18,
-        fontWeight: 600,
-        color: '#1e293b'
-      }
-    },
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c}人 ({d}%)',
-      backgroundColor: 'rgba(255,255,255,0.96)',
-      borderColor: '#e5e7eb',
-      textStyle: { color: '#334155' }
-    },
-    legend: {
-      bottom: 20,
-      left: 'center',
-      itemWidth: 12,
-      itemHeight: 12,
-      itemGap: 24,
-      textStyle: { color: '#64748b', fontSize: 13 }
-    },
-    series: [
-      {
-        name: '性别分布',
-        type: 'pie',
-        radius: ['42%', '70%'],
-        center: ['50%', '50%'],
-        avoidLabelOverlap: true,
-        itemStyle: {
-          borderRadius: 8,
-          borderColor: '#fff',
-          borderWidth: 3,
-          color: (params) => colorMap[params.name] || '#3b82f6'
-        },
-        label: {
-          show: true,
-          formatter: '{b}\n{d}%',
-          fontSize: 13,
-          color: '#334155',
-          lineHeight: 20
-        },
-        labelLine: {
-          show: true,
-          length: 16,
-          length2: 12,
-          lineStyle: { color: '#cbd5e1' }
-        },
-        emphasis: {
-          scaleSize: 8,
-          label: {
-            show: true,
-            fontSize: 15,
-            fontWeight: 600
-          },
-          itemStyle: {
-            shadowBlur: 16,
-            shadowColor: 'rgba(0,0,0,0.15)'
-          }
-        },
-        data: pieData,
-        animationType: 'scale',
-        animationDuration: 800,
-        animationEasing: 'cubicInOut'
-      }
-    ]
-  }
-
-  chartInstance.setOption(option)
+const COLOR_MAP_GENDER = {
+  '男': { label: '男生', color: '#3b82f6' },
+  '女': { label: '女生', color: '#f472b6' }
 }
 
-const handleResize = () => {
-  chartInstance?.resize()
+const COLOR_MAP_COURSE = {
+  '必修': { label: '必修课', color: '#1a56db' },
+  '选修': { label: '选修课', color: '#10b981' },
+  '实践': { label: '实践课', color: '#f59e0b' }
 }
+
+const handleResize = () => { genderChart?.resize(); courseChart?.resize() }
 
 onMounted(async () => {
-  loading.value = true
+  loadingGender.value = true
   try {
     const res = await getGenderStats()
-    const data = res.data || res || {}
-    initChart(data)
-    window.addEventListener('resize', handleResize)
-  } catch (e) {
-    console.error('获取性别统计数据失败', e)
-  } finally {
-    loading.value = false
-  }
+    const data = res.data || res || []
+    if (data.length) {
+      genderChart = echarts.init(genderChartRef.value)
+      genderChart.setOption(makePieOption('学生性别比例', data, COLOR_MAP_GENDER))
+    }
+  } catch (e) { console.error('获取性别统计失败', e) } finally { loadingGender.value = false }
+
+  loadingCourse.value = true
+  try {
+    const res = await getCourseTypeStats()
+    const data = res.data || res || []
+    if (data.length) {
+      courseChart = echarts.init(courseChartRef.value)
+      courseChart.setOption(makePieOption('课程类型分布', data, COLOR_MAP_COURSE))
+    }
+  } catch (e) { console.error('获取课程统计失败', e) } finally { loadingCourse.value = false }
+
+  window.addEventListener('resize', handleResize)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
-  chartInstance?.dispose()
+  genderChart?.dispose()
+  courseChart?.dispose()
 })
 </script>
 
 <style scoped>
-.pie-chart-page {
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-title {
-  font-size: 22px;
-  color: #1e293b;
-  font-weight: 700;
-  margin: 0 0 4px 0;
-}
-
-.page-desc {
-  font-size: 14px;
-  color: #94a3b8;
-  margin: 0;
-}
-
-.chart-card {
-  border-radius: 8px;
-}
-
-.chart-card :deep(.el-card__body) {
-  padding: 16px;
-}
-
-.chart-container {
-  width: 100%;
-  height: 460px;
-}
+.pie-chart-page { max-width: 1200px; margin: 0 auto; }
+.page-header { margin-bottom: 20px; }
+.page-title { font-size: 22px; color: #1e293b; font-weight: 700; margin: 0 0 4px; }
+.page-desc { font-size: 14px; color: #94a3b8; margin: 0; }
+.chart-card { border-radius: 8px; }
+.chart-card :deep(.el-card__body) { padding: 12px; }
+.chart-container { width: 100%; height: 400px; }
 </style>

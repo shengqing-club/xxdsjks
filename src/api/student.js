@@ -1,7 +1,12 @@
 import api from './index'
 
-export function getStudents(keyword) {
-  return api.get('/students', { params: keyword ? { keyword } : {} })
+export function getStudents(params) {
+  return api.get('/students', { params })
+}
+
+// 获取同班同学（学生端班级一览用）
+export function getClassmates() {
+  return api.get('/students/classmates')
 }
 
 export function addStudent(student) {
@@ -26,4 +31,17 @@ export function getMajorStats() {
 
 export function getGenderStats() {
   return api.get('/students/stats/gender')
+}
+
+export function getMajorsList() {
+  return api.get('/students/majors/list')
+}
+
+// 密码管理
+export function resetStudentPassword(id, newPassword) {
+  return api.post(`/students/${id}/reset-password`, { newPassword })
+}
+
+export function batchResetPassword(ids) {
+  return api.post('/students/batch-reset-password', { ids })
 }

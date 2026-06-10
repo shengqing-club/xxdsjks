@@ -104,10 +104,13 @@ onMounted(async () => {
           <span class="desc-val">{{ enrollmentSemester }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="学籍状态">
-          <el-tag type="success" size="small" effect="light">在读</el-tag>
+          <el-tag :type="student?.status === '在读' ? 'success' : 'warning'" size="small" effect="light">{{ student?.status || '在读' }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="学制">
           <span class="desc-val">四年制本科</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="注册时间">
+          <span class="desc-val">{{ student?.created_at ? student.created_at.slice(0, 10) : '--' }}</span>
         </el-descriptions-item>
       </el-descriptions>
     </el-card>

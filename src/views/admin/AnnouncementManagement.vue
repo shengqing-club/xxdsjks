@@ -32,9 +32,16 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="状态" width="80">
+          <template #default="{ row }">
+            <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
+              {{ row.is_active ? '发布中' : '已下架' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="发布时间" width="180">
           <template #default="{ row }">
-            {{ formatDate(row.createdAt) }}
+            {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
@@ -85,6 +92,9 @@
             <el-option label="活动" value="活动" />
           </el-select>
         </el-form-item>
+        <el-form-item label="状态">
+          <el-switch v-model="form.is_active" active-text="发布" inactive-text="下架" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -119,7 +129,8 @@ const form = ref({
   id: null,
   title: '',
   content: '',
-  type: '通知'
+  type: '通知',
+  is_active: true
 })
 
 const formRules = {
@@ -167,7 +178,8 @@ const resetForm = () => {
     id: null,
     title: '',
     content: '',
-    type: '通知'
+    type: '通知',
+    is_active: true
   }
 }
 
@@ -182,7 +194,8 @@ const handleEdit = (row) => {
     id: row.id,
     title: row.title,
     content: row.content,
-    type: row.type
+    type: row.type,
+    is_active: row.is_active
   }
   isEdit.value = true
   dialogVisible.value = true
@@ -196,7 +209,8 @@ const submitForm = async () => {
     const data = {
       title: form.value.title,
       content: form.value.content,
-      type: form.value.type
+      type: form.value.type,
+      is_active: form.value.is_active
     }
     if (isEdit.value) {
       await updateAnnouncement(form.value.id, data)

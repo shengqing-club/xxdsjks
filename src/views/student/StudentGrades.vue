@@ -168,7 +168,13 @@ watch(selectedSemester, async () => {
 onMounted(async () => {
   try {
     const res = await getGradesByStudent(studentId.value)
-    grades.value = res.data || []
+    const raw = res.data || []
+    grades.value = raw.map(g => ({
+      ...g,
+      courseName: g.course_name || g.courseName || '',
+      studentId: g.student_id || g.studentId || '',
+      courseType: g.course_type || g.courseType || '必修',
+    }))
   } catch (e) {
     console.error('加载成绩失败', e)
   } finally {

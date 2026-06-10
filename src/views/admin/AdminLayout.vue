@@ -7,6 +7,7 @@
         <h1 class="header-title">学生信息管理系统</h1>
       </div>
       <div class="header-right">
+        <NotificationCenter />
         <span class="user-name">
           <el-icon><UserFilled /></el-icon>
           {{ displayName }}
@@ -16,6 +17,9 @@
         </el-button>
       </div>
     </header>
+
+    <!-- 公告横幅 -->
+    <AnnouncementBar />
 
     <!-- Body -->
     <div class="admin-body">
@@ -52,6 +56,16 @@
             <span>成绩管理</span>
           </el-menu-item>
 
+          <el-menu-item index="/ranking">
+            <el-icon><TrophyBase /></el-icon>
+            <span>成绩排名</span>
+          </el-menu-item>
+
+          <el-menu-item index="/majors">
+            <el-icon><Collection /></el-icon>
+            <span>专业管理</span>
+          </el-menu-item>
+
           <el-menu-item index="/announcements">
             <el-icon><Bell /></el-icon>
             <span>公告管理</span>
@@ -60,6 +74,11 @@
           <el-menu-item index="/files">
             <el-icon><FolderOpened /></el-icon>
             <span>文件管理</span>
+          </el-menu-item>
+
+          <el-menu-item index="/exams">
+            <el-icon><Clock /></el-icon>
+            <span>考试管理</span>
           </el-menu-item>
 
           <el-sub-menu index="data-visual">
@@ -84,6 +103,9 @@
         <router-view />
       </main>
     </div>
+
+    <!-- Chat Room -->
+    <ChatRoom />
   </div>
 </template>
 
@@ -91,6 +113,9 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../../stores/auth'
+import AnnouncementBar from '../../components/AnnouncementBar.vue'
+import ChatRoom from '../../views/ChatRoom.vue'
+import NotificationCenter from '../../components/NotificationCenter.vue'
 import {
   School,
   UserFilled,
@@ -101,7 +126,10 @@ import {
   DataAnalysis,
   Histogram,
   PieChart,
-  FolderOpened
+  FolderOpened,
+  Clock,
+  TrophyBase,
+  Collection
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -144,9 +172,10 @@ const handleLogout = async () => {
 }
 
 .header-logo {
-  height: 36px;
-  width: 36px;
+  height: 40px;
+  width: auto;
   object-fit: contain;
+  max-width: 200px;
 }
 
 .header-title {
@@ -201,5 +230,16 @@ const handleLogout = async () => {
   background: #f0f5ff;
   padding: 20px;
   overflow-y: auto;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .admin-header { padding: 0 12px; height: 52px; }
+  .header-title { font-size: 16px; }
+  .header-logo { height: 30px; }
+  .admin-sidebar { width: 60px; }
+  .admin-sidebar .el-menu-item span,
+  .admin-sidebar .el-sub-menu__title span { display: none; }
+  .admin-content { padding: 12px; }
 }
 </style>

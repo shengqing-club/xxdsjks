@@ -1,8 +1,7 @@
 import api from './index'
 
 export function getFiles(category) {
-  const params = category ? { category } : {}
-  return api.get('/files', { params })
+  return api.get('/files', { params: category ? { category } : {} })
 }
 
 export function uploadFile(formData) {
@@ -12,7 +11,7 @@ export function uploadFile(formData) {
 }
 
 export function downloadFile(id) {
-  return api.get(`/files/download/${id}`, { responseType: 'blob' })
+  return api.get(`/files/${id}/download`, { responseType: 'blob' })
 }
 
 export function deleteFile(id) {
@@ -24,5 +23,5 @@ export function getStudentUploadSetting() {
 }
 
 export function setStudentUploadSetting(enabled) {
-  return api.put('/files/setting/student-upload', { enabled })
+  return api.post('/files/setting/student-upload', { enabled })
 }

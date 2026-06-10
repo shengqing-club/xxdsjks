@@ -25,7 +25,7 @@ const handleLogin = async (el) => {
     try {
       const data = await doLogin(form.username, form.password)
       ElMessage.success('登录成功')
-      router.push(data.role === 'admin' ? '/' : '/student')
+      router.push(data.user.role === 'admin' ? '/' : '/student')
     } catch (err) {
       ElMessage.error(err.response?.data?.message || '登录失败')
     } finally {

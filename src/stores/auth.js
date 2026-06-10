@@ -15,16 +15,17 @@ export function useAuth() {
   const doLogin = async (username, password) => {
     const res = await loginApi(username, password)
     const data = res.data
+    const u = data.user
     token.value = data.token
     user.value = {
-      username: data.username,
-      role: data.role,
-      displayName: data.displayName,
-      studentId: data.studentId,
+      username: u.username,
+      role: u.role,
+      displayName: u.displayName,
+      studentId: u.studentId,
     }
     localStorage.setItem('token', data.token)
     localStorage.setItem('user', JSON.stringify(user.value))
-    return data
+    return { token: data.token, user: u }
   }
 
   const doLogout = async () => {

@@ -13,9 +13,9 @@
       <div class="toolbar">
         <el-upload
           :show-file-list="false"
-          :before-upload="handleBeforeUpload"
-          :http-request="handleUpload"
-          multiple
+          :auto-upload="false"
+          :on-change="handleToolbarFileChange"
+          accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.zip,.rar,.png,.jpg,.jpeg,.mp4,.mp3"
         >
           <el-button type="primary">
             <el-icon><UploadFilled /></el-icon>
@@ -56,7 +56,7 @@
             :auto-upload="false"
             :file-list="uploadFileList"
             :limit="1"
-            :on-change="handleFileChange"
+            :on-change="handleDialogFileChange"
             :on-exceed="() => ElMessage.warning('每次只能上传一个文件')"
             drag
           >
@@ -85,19 +85,19 @@
     <!-- File Table -->
     <el-card shadow="never" class="table-card">
       <el-table :data="files" stripe style="width: 100%">
-        <el-table-column prop="originalName" label="文件名" min-width="220">
+        <el-table-column label="文件名" min-width="220">
           <template #default="{ row }">
             <div class="file-name">
-              <el-icon :size="18" :color="getFileIconColor(row.fileType)">
-                <component :is="getFileIcon(row.fileType)" />
+              <el-icon :size="18" :color="getFileIconColor(row.file_type)">
+                <component :is="getFileIcon(row.file_type)" />
               </el-icon>
-              <span class="name-text">{{ row.originalName }}</span>
+              <span class="name-text">{{ row.original_name }}</span>
             </div>
           </template>
         </el-table-column>
         <el-table-column label="大小" width="100">
           <template #default="{ row }">
-            {{ formatSize(row.fileSize) }}
+            {{ formatSize(row.file_size) }}
           </template>
         </el-table-column>
         <el-table-column label="分类" width="110">
@@ -109,17 +109,17 @@
         </el-table-column>
         <el-table-column label="上传者" width="120">
           <template #default="{ row }">
-            <el-tag :type="row.uploaderRole === 'admin' ? '' : 'success'" size="small" effect="plain">
-              {{ row.uploaderName || (row.uploaderRole === 'admin' ? '管理员' : '学生') }}
+            <el-tag :type="row.uploader_role === 'admin' ? '' : 'success'" size="small" effect="plain">
+              {{ row.uploader_name || (row.uploader_role === 'admin' ? '管理员' : '学生') }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="上传时间" width="170">
           <template #default="{ row }">
-            {{ formatTime(row.createdAt) }}
+            {{ formatTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="160">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="handleDownload(row)">
               <el-icon><Download /></el-icon>
@@ -183,18 +183,16 @@ const toggleStudentUpload = async (val) => {
 }
 
 // Quick upload (from toolbar button)
-const handleBeforeUpload = (file) => {
-  uploadFileList.value = [{ raw: file, name: file.name }]
+const handleToolbarFileChange = (file) => {
+  if (!file || !file.raw) return
+  uploadFileList.value = [{ raw: file.raw, name: file.name }]
   uploadForm.value = { category: 'general', description: '' }
   uploadDialogVisible.value = true
-  return false // prevent auto upload
 }
 
-const handleFileChange = (file) => {
+const handleDialogFileChange = (file) => {
   uploadFileList.value = [file]
 }
-
-const handleUpload = () => {} // placeholder for el-upload
 
 const submitUpload = async () => {
   if (!uploadFileList.value.length || !uploadFileList.value[0].raw) {
@@ -205,6 +203,7 @@ const submitUpload = async () => {
   try {
     const formData = new FormData()
     formData.append('file', uploadFileList.value[0].raw)
+    formData.append('originalFilename', uploadFileList.value[0].name) // 前端正确UTF-8文件名
     formData.append('uploaderRole', 'admin')
     formData.append('uploaderId', 'admin')
     formData.append('uploaderName', '管理员')
@@ -228,7 +227,7 @@ const handleDownload = async (row) => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = row.originalName
+    a.download = row.original_name
     a.click()
     URL.revokeObjectURL(url)
     ElMessage.success('开始下载')
@@ -240,7 +239,7 @@ const handleDownload = async (row) => {
 const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除文件「${row.originalName}」吗？删除后不可恢复。`,
+      `确定要删除文件「${row.original_name}」吗？删除后不可恢复。`,
       '确认删除',
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
     )

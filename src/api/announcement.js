@@ -1,5 +1,9 @@
 import api from './index'
 
+export function getActiveAnnouncements() {
+  return api.get('/announcements/active')
+}
+
 export function getAnnouncements() {
   return api.get('/announcements')
 }

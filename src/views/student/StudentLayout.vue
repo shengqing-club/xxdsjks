@@ -3,6 +3,9 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuth } from '../../stores/auth'
+import AnnouncementBar from '../../components/AnnouncementBar.vue'
+import ChatRoom from '../../views/ChatRoom.vue'
+import NotificationCenter from '../../components/NotificationCenter.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,9 +26,10 @@ const handleLogout = async () => {
     <div class="header">
       <div class="header-left">
         <img src="../../assets/logo.png" class="header-logo" alt="logo" />
-        <span class="header-title">学生个人中心</span>
+        <span class="header-title">学生个人考试终端</span>
       </div>
       <div class="header-right">
+        <NotificationCenter />
         <el-icon class="avatar-icon" :size="18"><User /></el-icon>
         <span class="display-name">{{ displayName }}</span>
         <el-button size="small" round plain type="primary" class="logout-btn" @click="handleLogout">
@@ -34,6 +38,9 @@ const handleLogout = async () => {
         </el-button>
       </div>
     </div>
+
+    <!-- 公告横幅 -->
+    <AnnouncementBar />
 
     <!-- Body: sidebar + content -->
     <div class="body">
@@ -50,6 +57,10 @@ const handleLogout = async () => {
           <el-menu-item index="/student/dashboard">
             <el-icon><DataBoard /></el-icon>
             <span>学习概览</span>
+          </el-menu-item>
+          <el-menu-item index="/student/exams">
+            <el-icon><Calendar /></el-icon>
+            <span>考试安排</span>
           </el-menu-item>
           <el-menu-item index="/student/profile">
             <el-icon><User /></el-icon>
@@ -83,6 +94,9 @@ const handleLogout = async () => {
         <router-view />
       </div>
     </div>
+
+    <!-- Chat Room -->
+    <ChatRoom />
   </div>
 </template>
 
@@ -113,10 +127,10 @@ const handleLogout = async () => {
   gap: 12px;
 }
 .header-logo {
-  height: 32px;
-  width: 32px;
+  height: 40px;
+  width: auto;
   object-fit: contain;
-  border-radius: 6px;
+  max-width: 200px;
 }
 .header-title {
   font-size: 17px;
@@ -188,5 +202,15 @@ const handleLogout = async () => {
   overflow-y: auto;
   padding: 20px;
   background: #f0f5ff;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .header { padding: 0 12px; height: 52px; }
+  .header-title { font-size: 15px; }
+  .header-logo { height: 30px; }
+  .sidebar { width: 56px; }
+  .sidebar-menu .el-menu-item span { display: none; }
+  .content { padding: 12px; }
 }
 </style>

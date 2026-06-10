@@ -1,28 +1,20 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useAuth } from '../../stores/auth'
-import { getStudents, getStudentByStudentId } from '../../api/student'
+import { getClassmates, getStudentByStudentId } from '../../api/student'
 
 const { displayName, studentId } = useAuth()
 
 const loading = ref(true)
 const currentStudent = ref(null)
-const allStudents = ref([])
+const classmates = ref([])
 
-// Classmates filtered by same className
-const classmates = computed(() => {
-  if (!currentStudent.value?.className) return []
-  return allStudents.value.filter(
-    s => s.className === currentStudent.value.className
-  )
-})
-
-// Class info
-const className = computed(() => currentStudent.value?.className || '--')
+// 班级信息
+const className = computed(() => currentStudent.value?.class_name || '--')
 const major = computed(() => currentStudent.value?.major || '--')
 const totalStudents = computed(() => classmates.value.length)
 
-// Gender stats
+// 性别统计
 const maleCount = computed(() => classmates.value.filter(s => s.gender === '男').length)
 const femaleCount = computed(() => classmates.value.filter(s => s.gender === '女').length)
 const malePercent = computed(() => {
@@ -34,7 +26,7 @@ const femalePercent = computed(() => {
   return ((femaleCount.value / totalStudents.value) * 100).toFixed(0)
 })
 
-// Average age
+// 平均年龄
 const avgAge = computed(() => {
   const withAge = classmates.value.filter(s => s.age != null && s.age !== '')
   if (!withAge.length) return '--'
@@ -44,12 +36,12 @@ const avgAge = computed(() => {
 
 onMounted(async () => {
   try {
-    const [studentRes, studentsRes] = await Promise.all([
-      getStudentByStudentId(studentId.value),
-      getStudents(),
-    ])
+    // 先获取当前学生信息（确定班级）
+    const studentRes = await getStudentByStudentId(studentId.value)
     currentStudent.value = studentRes.data
-    allStudents.value = studentsRes.data || []
+    // 再获取同班同学
+    const matesRes = await getClassmates()
+    classmates.value = matesRes.data || []
   } catch (e) {
     console.error('加载班级信息失败', e)
   } finally {
@@ -144,15 +136,15 @@ onMounted(async () => {
       <el-table
         :data="classmates"
         stripe
-        row-key="studentId"
+        row-key="student_id"
         empty-text="暂无同班同学数据"
       >
-        <el-table-column prop="studentId" label="学号" width="180" />
+        <el-table-column prop="student_id" label="学号" width="180" />
         <el-table-column prop="name" label="姓名" min-width="120">
           <template #default="{ row }">
             <span class="student-name">{{ row.name }}</span>
             <el-tag
-              v-if="String(row.studentId) === String(studentId)"
+              v-if="String(row.student_id) === String(studentId)"
               type="primary"
               size="small"
               effect="plain"

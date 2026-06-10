@@ -97,12 +97,20 @@
         <span class="action-desc">发布系统公告与通知</span>
       </el-card>
 
-      <el-card shadow="never" class="action-card" @click="router.push('/bar')">
-        <div class="action-icon action-icon--chart">
-          <el-icon :size="32"><DataAnalysis /></el-icon>
+      <el-card shadow="never" class="action-card" @click="router.push('/ranking')">
+        <div class="action-icon action-icon--ranking">
+          <el-icon :size="32"><TrophyBase /></el-icon>
         </div>
-        <span class="action-label">数据查看</span>
-        <span class="action-desc">查看数据统计图表</span>
+        <span class="action-label">成绩排名</span>
+        <span class="action-desc">查看学生成绩排名</span>
+      </el-card>
+
+      <el-card shadow="never" class="action-card" @click="router.push('/majors')">
+        <div class="action-icon action-icon--major">
+          <el-icon :size="32"><Collection /></el-icon>
+        </div>
+        <span class="action-label">专业管理</span>
+        <span class="action-desc">管理学校专业设置</span>
       </el-card>
     </div>
 
@@ -119,7 +127,7 @@
         <el-timeline-item
           v-for="item in recentAnnouncements"
           :key="item.id"
-          :timestamp="formatDate(item.createdAt)"
+          :timestamp="formatDate(item.created_at)"
           placement="top"
           :type="getTimelineType(item.type)"
         >
@@ -152,6 +160,7 @@ import {
   ArrowRight
 } from '@element-plus/icons-vue'
 import { getStudents } from '../../api/student'
+import { getAllGrades } from '../../api/grade'
 import { getAnnouncements } from '../../api/announcement'
 
 const router = useRouter()
@@ -203,7 +212,7 @@ onMounted(async () => {
     const classSet = new Set()
     students.forEach((s) => {
       if (s.major) majorSet.add(s.major)
-      if (s.className) classSet.add(s.className)
+      if (s.class_name || s.className) classSet.add(s.class_name || s.className)
     })
     totalMajors.value = majorSet.size
     totalClasses.value = classSet.size
@@ -212,10 +221,17 @@ onMounted(async () => {
   }
 
   try {
+    const res = await getAllGrades()
+    const grades = res.data || res || []
+    totalGrades.value = grades.length
+  } catch (e) {
+    console.error('获取成绩数据失败', e)
+  }
+
+  try {
     const res = await getAnnouncements()
     const announcements = res.data || res || []
     recentAnnouncements.value = announcements.slice(0, 3)
-    totalGrades.value = announcements.length
   } catch (e) {
     console.error('获取公告数据失败', e)
   }
@@ -443,6 +459,16 @@ onUnmounted(() => {
 .action-icon--chart {
   background: #ede9fe;
   color: #7c3aed;
+}
+
+.action-icon--ranking {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.action-icon--major {
+  background: #ecfdf5;
+  color: #059669;
 }
 
 .action-label {

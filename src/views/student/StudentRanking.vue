@@ -1,68 +1,23 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useAuth } from '../../stores/auth'
-import { getStudents } from '../../api/student'
-import { getAllGrades } from '../../api/grade'
+import { getPublicRanking } from '../../api/grade'
 
 const { displayName, studentId } = useAuth()
 
 const loading = ref(true)
-const allStudents = ref([])
-const allGrades = ref([])
+const rankingData = ref([])
 
-// Group grades by studentId and compute stats
-const studentStats = computed(() => {
-  const map = {}
-  for (const g of allGrades.value) {
-    const sid = g.studentId
-    if (!map[sid]) {
-      map[sid] = { studentId: sid, scores: [], sum: 0, max: 0 }
-    }
-    map[sid].scores.push(g.score)
-    map[sid].sum += g.score
-    if (g.score > map[sid].max) map[sid].max = g.score
-  }
-  const list = Object.values(map).map(s => ({
-    studentId: s.studentId,
-    avg: s.scores.length ? s.sum / s.scores.length : 0,
-    max: s.max,
-    courseCount: s.scores.length,
-  }))
-  // Sort descending by avg
-  list.sort((a, b) => b.avg - a.avg)
-  // Assign rank
-  list.forEach((s, i) => { s.rank = i + 1 })
-  return list
-})
-
-// Build name lookup from allStudents
-const studentNameMap = computed(() => {
-  const m = {}
-  for (const s of allStudents.value) {
-    m[s.studentId] = s.name
-  }
-  return m
-})
-
-// Ranking table data with name
-const rankingData = computed(() => {
-  return studentStats.value.map(s => ({
-    ...s,
-    name: studentNameMap.value[s.studentId] || s.studentId,
-    avgDisplay: s.avg.toFixed(1),
-  }))
-})
-
-// Current student's ranking info
+// 当前学生的排名信息
 const myRanking = computed(() => {
-  return rankingData.value.find(r => String(r.studentId) === String(studentId.value)) || null
+  return rankingData.value.find(r => String(r.student_id) === String(studentId.value)) || null
 })
 
-// Medal icon for top 3
+// 奖牌颜色
 const getMedalColor = (rank) => {
-  if (rank === 1) return '#f59e0b'   // gold
-  if (rank === 2) return '#94a3b8'   // silver
-  if (rank === 3) return '#cd7f32'   // bronze
+  if (rank === 1) return '#f59e0b'
+  if (rank === 2) return '#94a3b8'
+  if (rank === 3) return '#cd7f32'
   return ''
 }
 
@@ -73,9 +28,9 @@ const getMedalLabel = (rank) => {
   return ''
 }
 
-// Row class for highlighting current student
+// 高亮当前学生行
 const tableRowClassName = ({ row }) => {
-  if (String(row.studentId) === String(studentId.value)) {
+  if (String(row.student_id) === String(studentId.value)) {
     return 'current-student-row'
   }
   return ''
@@ -83,12 +38,8 @@ const tableRowClassName = ({ row }) => {
 
 onMounted(async () => {
   try {
-    const [studentsRes, gradesRes] = await Promise.all([
-      getStudents(),
-      getAllGrades(),
-    ])
-    allStudents.value = studentsRes.data || []
-    allGrades.value = gradesRes.data || []
+    const res = await getPublicRanking()
+    rankingData.value = res.data || []
   } catch (e) {
     console.error('加载排名数据失败', e)
   } finally {
@@ -117,15 +68,15 @@ onMounted(async () => {
         <div class="my-rank-stats">
           <div class="my-stat">
             <p class="my-stat-label">平均分</p>
-            <p class="my-stat-value">{{ myRanking.avgDisplay }}</p>
+            <p class="my-stat-value">{{ Number(myRanking.avg_score || 0).toFixed(1) }}</p>
           </div>
           <div class="my-stat">
             <p class="my-stat-label">最高分</p>
-            <p class="my-stat-value">{{ myRanking.max }}</p>
+            <p class="my-stat-value">{{ myRanking.max_score }}</p>
           </div>
           <div class="my-stat">
             <p class="my-stat-label">课程数</p>
-            <p class="my-stat-value">{{ myRanking.courseCount }}</p>
+            <p class="my-stat-value">{{ myRanking.course_count }}</p>
           </div>
           <div class="my-stat">
             <p class="my-stat-label">总人数</p>
@@ -140,7 +91,7 @@ onMounted(async () => {
       <el-table
         :data="rankingData"
         stripe
-        row-key="studentId"
+        row-key="student_id"
         :row-class-name="tableRowClassName"
         empty-text="暂无排名数据"
       >
@@ -152,22 +103,22 @@ onMounted(async () => {
             <span v-else class="rank-num">{{ row.rank }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="studentId" label="学号" width="160" />
+        <el-table-column prop="student_id" label="学号" width="160" />
         <el-table-column prop="name" label="姓名" min-width="120">
           <template #default="{ row }">
             <span class="student-name">{{ row.name }}</span>
-            <el-tag v-if="String(row.studentId) === String(studentId)" type="primary" size="small" effect="plain" round class="me-tag">
+            <el-tag v-if="String(row.student_id) === String(studentId)" type="primary" size="small" effect="plain" round class="me-tag">
               我
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="平均分" width="120" align="center">
           <template #default="{ row }">
-            <span class="score-val">{{ row.avgDisplay }}</span>
+            <span class="score-val">{{ Number(row.avg_score || 0).toFixed(1) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="max" label="最高分" width="110" align="center" />
-        <el-table-column prop="courseCount" label="课程数" width="100" align="center" />
+        <el-table-column prop="max_score" label="最高分" width="110" align="center" />
+        <el-table-column prop="course_count" label="课程数" width="100" align="center" />
       </el-table>
     </el-card>
   </div>
@@ -293,7 +244,7 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-/* Current student row highlight - using deep since el-table row classes are not scoped */
+/* Current student row highlight */
 .table-card :deep(.current-student-row) {
   background-color: #eff6ff !important;
 }
