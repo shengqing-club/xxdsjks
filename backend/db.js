@@ -1,8 +1,10 @@
 import pkg from 'pg'
 const { Pool } = pkg
 
-const connectionString = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_AvOmIHM5wDt8@ep-flat-hat-ao566lsu-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
-
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) {
+  console.error('ERROR: DATABASE_URL 环境变量未设置！')
+}
 const pool = new Pool({
   connectionString,
   max: 20,

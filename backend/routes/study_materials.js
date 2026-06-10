@@ -1,48 +1,35 @@
 import { Router } from 'express'
 import multer from 'multer'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import pool from '../db.js'
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
 const router = Router()
+router.use(authMiddleware)
 
-// ============ multer 配置 ============
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../uploads'))
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9)
-    const ext = path.extname(file.originalname)
-    cb(null, uniqueSuffix + ext)
-  }
-})
+// 使用 memoryStorage（兼容 Netlify serverless 环境）
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
-  fileFilter: (req, file, cb) => {
-    const allowed = ['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', '.zip', '.rar']
-    const ext = path.extname(file.originalname).toLowerCase()
-    if (allowed.includes(ext)) {
-      cb(null, true)
-    } else {
-      cb(new Error('不支持的文件类型，仅支持: ' + allowed.join(', ')))
+// 确保 study_materials 表有 file_data 列
+const ensureFileDataColumn = async () => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name='study_materials' AND column_name='file_data'`
+    )
+    if (rows.length === 0) {
+      await pool.query('ALTER TABLE study_materials ADD COLUMN file_data BYTEA')
+      console.log('已添加 study_materials.file_data 列')
     }
+  } catch (e) {
+    console.error('检查/添加 file_data 列失败:', e.message)
   }
-})
+}
+ensureFileDataColumn()
 
-// ============ 路由 ============
-
-// 获取复习资料列表（登录用户可看）
-router.get('/', authMiddleware, async (req, res) => {
+// 获取复习资料列表
+router.get('/', async (req, res) => {
   try {
     const { class_name, course_name } = req.query
-    let sql = 'SELECT * FROM study_materials WHERE 1=1'
+    let sql = 'SELECT id, title, file_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, created_at FROM study_materials WHERE 1=1'
     const params = []
     let idx = 1
     if (class_name) {
@@ -62,36 +49,35 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 })
 
-// 上传复习资料
-router.post('/upload', authMiddleware, upload.single('file'), async (req, res) => {
+// 上传复习资料（存入数据库）
+router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: '请选择文件' })
 
     const { title, course_name, class_name } = req.body
     if (!title) return res.status(400).json({ message: '请输入资料标题' })
 
-    const fileUrl = `/uploads/${req.file.filename}`
     const uploaderId = req.user.studentId || req.user.username
     const uploaderName = req.user.name || uploaderId
-    // 判断角色：有 studentId 说明是 JWT 里带的学生，否则是管理员
     const uploaderRole = req.user.studentId ? 'student' : 'admin'
 
     const result = await pool.query(
-      `INSERT INTO study_materials 
-        (title, file_url, file_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO study_materials
+        (title, file_url, file_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, file_data)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
       [
         title,
-        fileUrl,
+        `stored-in-db://${req.file.originalname}`,
         req.file.originalname,
         req.file.size,
-        path.extname(req.file.originalname).slice(1),
+        req.file.mimetype,
         course_name || null,
         class_name || null,
         uploaderId,
         uploaderName,
-        uploaderRole
+        uploaderRole,
+        req.file.buffer
       ]
     )
 
@@ -121,49 +107,40 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
   }
 })
 
-// 下载复习资料
-router.get('/download/:id', authMiddleware, async (req, res) => {
+// 下载复习资料（从数据库读取）
+router.get('/download/:id', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM study_materials WHERE id = $1',
-      [req.params.id]
-    )
+    const result = await pool.query('SELECT * FROM study_materials WHERE id = $1', [req.params.id])
     if (result.rows.length === 0) return res.status(404).json({ message: '资料不存在' })
     const material = result.rows[0]
-    const filePath = path.join(__dirname, '..', material.file_url)
-    res.download(filePath, material.file_name)
+
+    if (!material.file_data) {
+      return res.status(404).json({ message: '文件内容已丢失' })
+    }
+
+    res.setHeader('Content-Type', material.file_type || 'application/octet-stream')
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(material.file_name)}`)
+    res.setHeader('Content-Length', material.file_size)
+    res.send(material.file_data)
   } catch (e) {
     console.error(e)
     res.status(500).json({ message: '下载失败' })
   }
 })
 
-// 删除复习资料（发布者或管理员可删）
-router.delete('/:id', authMiddleware, async (req, res) => {
+// 删除复习资料
+router.delete('/:id', async (req, res) => {
   try {
     const userId = req.user.studentId || req.user.username
     const isAdmin = !!req.user.username && !req.user.studentId
 
-    // 查询资料
-    const result = await pool.query(
-      'SELECT * FROM study_materials WHERE id = $1',
-      [req.params.id]
-    )
+    const result = await pool.query('SELECT * FROM study_materials WHERE id = $1', [req.params.id])
     if (result.rows.length === 0) return res.status(404).json({ message: '资料不存在' })
 
     const material = result.rows[0]
-    // 权限检查：发布者本人 或 管理员
     if (material.uploader_id !== userId && !isAdmin) {
       return res.status(403).json({ message: '无权删除此资料' })
     }
-
-    // 删除文件
-    try {
-      const filePath = path.join(__dirname, '..', material.file_url)
-      await import('fs').then(fs => {
-        fs.unlink(filePath, () => {})
-      })
-    } catch {}
 
     await pool.query('DELETE FROM study_materials WHERE id = $1', [req.params.id])
     res.json({ message: '删除成功' })
