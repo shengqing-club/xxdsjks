@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="ranking-page" v-loading="loading">
     <div class="page-header">
       <div>
@@ -131,7 +131,7 @@ const handleExport = () => {
   const ws = XLSX.utils.json_to_sheet(data)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '成绩排名')
-  XLSX.writeFile(wb, `成绩排名_${new Date().toISOString().slice(0,10)}.xlsx`)
+  XLSX.writeFile(wb, `成绩排名_${localDateStr()}.xlsx`)
   ElMessage.success('导出成功')
 }
 
@@ -166,3 +166,4 @@ onMounted(() => { fetchData(); fetchMajors() })
 .table-card { border-radius: 8px; }
 .table-card :deep(.el-card__body) { padding: 0; }
 </style>
+

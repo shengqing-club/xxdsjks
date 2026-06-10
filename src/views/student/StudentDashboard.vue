@@ -22,7 +22,11 @@ const studyMaterials = ref([])
 const unreadCount = ref(0)
 
 const now = new Date()
-const todayStr = now.toISOString().slice(0, 10)
+// 用本地时间取当天日期，避免 toISOString 的 UTC 偏移
+const todayStr = (() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+})()
 
 // ============ 统计数据 ============
 const courseCount = computed(() => grades.value.length)

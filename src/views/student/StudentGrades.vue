@@ -98,7 +98,9 @@ const handleExport = () => {
   ]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '我的成绩')
-  const fileName = `我的成绩_${new Date().toISOString().slice(0, 10)}.xlsx`
+  const d = new Date()
+  const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const fileName = `我的成绩_${today}.xlsx`
   XLSX.writeFile(wb, fileName)
   ElMessage.success(`已导出 ${data.length} 条记录`)
 }

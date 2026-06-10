@@ -43,7 +43,16 @@ export function formatTimeRange(exam) {
 // ===== 考试状态 =====
 
 const now = new Date()
-const todayStr = now.toISOString().slice(0, 10)
+
+/** 获取中国时区的当天日期字符串 YYYY-MM-DD（避免 toISOString 的 UTC 偏移问题） */
+function getTodayStrCST() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const todayStr = getTodayStrCST()
 
 /**
  * 获取考试状态标签
