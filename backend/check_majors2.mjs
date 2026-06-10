@@ -1,7 +1,8 @@
+import 'dotenv/config'
 import { Pool } from 'pg'
 
 const pool = new Pool({
-  connectionString: 'postgresql://neondb_owner:npg_AvOmIHM5wDt8@ep-flat-hat-ao566lsu-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
+  connectionString: process.env.DATABASE_URL,
   max: 1,
 })
 
