@@ -5,7 +5,10 @@
         <h2 class="page-title">成绩发布与管理</h2>
         <p class="page-desc">按班级查看成绩，支持筛选、编辑与Excel导入导出</p>
       </div>
-      <div class="view-toggle">
+      <div class="header-actions">
+        <el-button type="warning" plain size="small" @click="showCourseManager = true">
+          <el-icon><Setting /></el-icon>课程管理
+        </el-button>
         <el-radio-group v-model="viewMode" size="small">
           <el-radio-button label="class">班级视图</el-radio-button>
           <el-radio-button label="all">全局视图</el-radio-button>
@@ -25,7 +28,6 @@
 
     <!-- 班级视图 -->
     <template v-if="viewMode === 'class'">
-      <!-- 班级概览卡片 -->
       <div class="class-overview-grid">
         <div
           v-for="cls in classStats"
@@ -61,7 +63,6 @@
         </div>
       </div>
 
-      <!-- 当前班级成绩详情 -->
       <el-card v-if="activeClass" shadow="never" class="table-card class-detail-card">
         <template #header>
           <div class="class-detail-header">
@@ -75,8 +76,6 @@
           <el-input v-model="classSearch" placeholder="搜索学号/姓名/课程" clearable style="width: 220px" @clear="filterClassGrades" @keyup.enter="filterClassGrades">
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
-          <el-button type="primary" plain size="small" @click="filterClassGrades">搜索</el-button>
-          <el-button size="small" @click="classSearch = ''; filterClassGrades()">重置</el-button>
           <el-button size="small" type="success" plain @click="exportClassGrades">
             <el-icon><Download /></el-icon>导出本班
           </el-button>
@@ -122,7 +121,10 @@
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
           <el-select v-model="filterMajor" placeholder="专业筛选" clearable style="width: 160px" @change="handleSearch">
-            <el-option v-for="m in majorList" :key="m" :label="m" :value="m" />
+            <el-option v-for="m in majorList" :key="m.name" :label="m.name" :value="m.name" />
+          </el-select>
+          <el-select v-model="filterCourse" placeholder="课程筛选" clearable style="width: 160px" @change="handleSearch">
+            <el-option v-for="c in courseOptions" :key="c.name || c" :label="c.name || c" :value="c.name || c" />
           </el-select>
           <el-button type="primary" plain @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset"><el-icon><RefreshRight /></el-icon>重置</el-button>
@@ -157,7 +159,7 @@
       </el-card>
     </template>
 
-    <!-- 编辑对话框 -->
+    <!-- 编辑/新增成绩对话框 -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑成绩' : '新增成绩'" width="500px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
         <el-form-item label="学号" prop="studentId">
@@ -166,7 +168,9 @@
           </el-select>
         </el-form-item>
         <el-form-item label="课程名称" prop="courseName">
-          <el-input v-model="form.courseName" placeholder="请输入课程名称" />
+          <el-select v-model="form.courseName" placeholder="请选择课程" style="width:100%" filterable>
+            <el-option v-for="c in courseOptions" :key="c.name || c" :label="c.name || c" :value="c.name || c" />
+          </el-select>
         </el-form-item>
         <el-form-item label="成绩" prop="score">
           <el-input-number v-model="form.score" :min="0" :max="100" :precision="0" style="width:100%" />
@@ -188,7 +192,7 @@
       </template>
     </el-dialog>
 
-    <!-- 导入预览 -->
+    <!-- 导入预览对话框 -->
     <el-dialog v-model="importDialogVisible" title="Excel 导入预览" width="700px">
       <div class="import-info">已解析 <strong>{{ importData.length }}</strong> 条，请确认</div>
       <el-table :data="importData.slice(0, 10)" stripe max-height="300" style="margin:12px 0">
@@ -204,31 +208,84 @@
         <el-button type="primary" :loading="importLoading" @click="confirmImport">确认导入</el-button>
       </template>
     </el-dialog>
+
+    <!-- 课程管理对话框 -->
+    <el-dialog v-model="showCourseManager" title="课程管理" width="650px" destroy-on-close>
+      <div class="course-mgr-toolbar">
+        <el-button type="primary" size="small" @click="openAddCourse">
+          <el-icon><Plus /></el-icon>新增课程
+        </el-button>
+      </div>
+      <el-table :data="courseList" stripe size="small" max-height="380">
+        <el-table-column prop="name" label="课程名称" min-width="120" />
+        <el-table-column prop="code" label="代码" width="90" />
+        <el-table-column prop="credit" label="学分" width="60" align="center" />
+        <el-table-column prop="major" label="所属专业" width="110" />
+        <el-table-column label="操作" width="90" align="center">
+          <template #default="{ row }">
+            <el-button type="primary" size="small" text @click="openEditCourse(row)"><el-icon><Edit /></el-icon></el-button>
+            <el-button type="danger" size="small" text @click="handleDeleteCourse(row)"><el-icon><Delete /></el-icon></el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- 新增/编辑课程对话框 -->
+    <el-dialog v-model="showCourseDialog" :title="isEditCourse ? '编辑课程' : '新增课程'" width="450px" destroy-on-close>
+      <el-form ref="courseFormRef" :model="courseForm" :rules="courseRules" label-width="80px">
+        <el-form-item label="名称" prop="name">
+          <el-input v-model="courseForm.name" placeholder="请输入课程名称" />
+        </el-form-item>
+        <el-form-item label="代码">
+          <el-input v-model="courseForm.code" placeholder="例如：CS101" />
+        </el-form-item>
+        <el-form-item label="学分">
+          <el-input-number v-model="courseForm.credit" :min="1" :max="10" />
+        </el-form-item>
+        <el-form-item label="专业">
+          <el-select v-model="courseForm.major" placeholder="请选择" clearable>
+            <el-option v-for="m in majorList" :key="m.name" :label="m.name" :value="m.name" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="courseForm.description" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showCourseDialog = false">取消</el-button>
+        <el-button type="primary" :loading="courseSubmitting" @click="submitCourseForm">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, RefreshRight, Edit, Delete, Download, Upload, School } from '@element-plus/icons-vue'
+import { Plus, Search, RefreshRight, Edit, Delete, Download, Upload, School, Setting } from '@element-plus/icons-vue'
 import { getAllGrades, addGrade, updateGrade, deleteGrade, batchImportGrades, getGradeDistribution, getGradeByClass } from '../../api/grade'
-import { getStudents, getMajorsList } from '../../api/student'
+import { getStudents } from '../../api/student'
+import { getMajors } from '../../api/major'
+import { getCourses, addCourse, updateCourse, deleteCourse } from '../../api/course'
 import * as XLSX from 'xlsx'
 
 const loading = ref(false)
-const viewMode = ref('class') // 'class' | 'all'
+const viewMode = ref('class')
 const activeClass = ref('')
 const classSearch = ref('')
 const grades = ref([])
 const searchKeyword = ref('')
 const filterMajor = ref('')
+const filterCourse = ref('')
 const filteredGrades = ref([])
 const majorList = ref([])
 const studentOptions = ref([])
+const courseOptions = ref([])
+const courseList = ref([])
 const distStats = ref({ excellent: 0, good: 0, medium: 0, pass: 0, fail: 0 })
 const classStats = ref([])
 
-// Dialogs
+// 成绩对话框
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const submitLoading = ref(false)
@@ -236,11 +293,23 @@ const formRef = ref(null)
 const form = ref({ id: null, studentId: '', courseName: '', score: null, courseType: '必修', semester: '2024-2025-2' })
 const formRules = {
   studentId: [{ required: true, message: '请选择学生', trigger: 'change' }],
-  courseName: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
+  courseName: [{ required: true, message: '请选择课程', trigger: 'change' }],
   score: [{ required: true, message: '请输入成绩', trigger: 'blur' }],
   semester: [{ required: true, message: '请输入学期', trigger: 'blur' }]
 }
 
+// 课程管理
+const showCourseManager = ref(false)
+const showCourseDialog = ref(false)
+const isEditCourse = ref(false)
+const courseSubmitting = ref(false)
+const courseFormRef = ref(null)
+const courseForm = ref({ id: null, name: '', code: '', credit: 3, major: '', description: '' })
+const courseRules = {
+  name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }]
+}
+
+// 导入
 const importDialogVisible = ref(false)
 const importData = ref([])
 const importLoading = ref(false)
@@ -253,7 +322,6 @@ const statsCards = computed(() => [
   { label: '不及格(<60)', value: distStats.value.fail || 0, color: '#dc2626' },
 ])
 
-// 当前班级的成绩
 const classGrades = computed(() => {
   if (!activeClass.value) return []
   return grades.value.filter(g => g.class_name === activeClass.value)
@@ -273,16 +341,21 @@ const getScoreColor = (s) => s >= 90 ? '#10b981' : s >= 80 ? '#2563eb' : s >= 70
 const getScoreTag = (s) => s >= 90 ? 'success' : s >= 80 ? 'primary' : s >= 70 ? 'warning' : s >= 60 ? 'info' : 'danger'
 const getLevel = (s) => s >= 90 ? '优秀' : s >= 80 ? '良好' : s >= 70 ? '中等' : s >= 60 ? '及格' : '不及格'
 
+// ========== 数据获取 ==========
 const fetchData = async () => {
   loading.value = true
+  const timeout = (p, ms = 8000) => Promise.race([
+    p,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时')), ms))
+  ])
   try {
     const params = {}
     if (filterMajor.value) params.major = filterMajor.value
     const [gradeRes, studentRes, majorRes, classStatRes] = await Promise.all([
-      getAllGrades(params),
-      getStudents(),
-      getMajorsList(),
-      getGradeByClass()
+      timeout(getAllGrades(params)),
+      timeout(getStudents()),
+      timeout(getMajors()),
+      timeout(getGradeByClass())
     ])
     grades.value = gradeRes.data || gradeRes || []
     studentOptions.value = studentRes.data || studentRes || []
@@ -298,13 +371,31 @@ const fetchData = async () => {
       grade_count: parseInt(c.grade_count) || 0,
     }))
     filteredGrades.value = [...grades.value]
-    // 默认选中第一个班级
     if (viewMode.value === 'class' && classStats.value.length && !activeClass.value) {
       activeClass.value = classStats.value[0].class_name
     }
   } catch (e) {
-    ElMessage.error('获取数据失败')
+    console.error('[GradeManagement] fetchData 失败:', e.message, e)
+    ElMessage.error('获取数据失败：' + (e.message || '未知错误'))
   } finally { loading.value = false }
+}
+
+const fetchCourses = async () => {
+  try {
+    const res = await getCourses()
+    const data = res.data || res || []
+    courseList.value = data
+    courseOptions.value = data.map(c => c.name).filter(Boolean)
+    // 如果没有课程数据，从成绩中提取唯一课程名作为备选
+    if (!courseOptions.value.length) {
+      const names = [...new Set(grades.value.map(g => g.course_name).filter(Boolean))]
+      courseOptions.value = names
+    }
+  } catch (e) {
+    // 如果 courses 表不存在，从成绩中提取
+    const names = [...new Set(grades.value.map(g => g.course_name).filter(Boolean))]
+    courseOptions.value = names
+  }
 }
 
 const fetchDist = async () => {
@@ -314,6 +405,7 @@ const fetchDist = async () => {
   } catch {}
 }
 
+// ========== 搜索/重置 ==========
 const handleSearch = () => {
   let result = [...grades.value]
   const kw = searchKeyword.value.trim().toLowerCase()
@@ -325,18 +417,22 @@ const handleSearch = () => {
       (g.class_name && g.class_name.toLowerCase().includes(kw))
     )
   }
+  if (filterCourse.value) {
+    result = result.filter(g => g.course_name === filterCourse.value)
+  }
   filteredGrades.value = result
 }
 
-const handleReset = () => { searchKeyword.value = ''; filterMajor.value = ''; fetchData(); fetchDist() }
+const handleReset = () => { searchKeyword.value = ''; filterMajor.value = ''; filterCourse.value = ''; fetchData(); fetchDist() }
 const resetForm = () => { form.value = { id: null, studentId: '', courseName: '', score: null, courseType: '必修', semester: '2024-2025-2' } }
-const handleAdd = () => { resetForm(); isEdit.value = false; dialogVisible.value = true }
+const resetCourseForm = () => { courseForm.value = { id: null, name: '', code: '', credit: 3, major: '', description: '' } }
 
+// ========== 成绩新增/编辑/删除 ==========
+const handleAdd = () => { resetForm(); isEdit.value = false; dialogVisible.value = true }
 const handleEdit = (row) => {
   form.value = { id: row.id, studentId: row.student_id, courseName: row.course_name, score: row.score, courseType: row.course_type || '必修', semester: row.semester }
   isEdit.value = true; dialogVisible.value = true
 }
-
 const submitForm = async () => {
   if (!formRef.value) return
   await formRef.value.validate()
@@ -350,7 +446,6 @@ const submitForm = async () => {
   } catch (e) { ElMessage.error(isEdit.value ? '修改失败' : '添加失败') }
   finally { submitLoading.value = false }
 }
-
 const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm(`确定删除「${row.student_name || row.student_id}」的「${row.course_name}」成绩吗？`, '确认', { type: 'warning' })
@@ -360,9 +455,35 @@ const handleDelete = async (row) => {
   } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') }
 }
 
-// Filter for class search
-const filterClassGrades = () => {} // computed handles it
+// ========== 课程管理 ==========
+const openAddCourse = () => { resetCourseForm(); isEditCourse.value = false; showCourseDialog.value = true }
+const openEditCourse = (row) => {
+  courseForm.value = { id: row.id, name: row.name, code: row.code || '', credit: row.credit || 3, major: row.major || '', description: row.description || '' }
+  isEditCourse.value = true; showCourseDialog.value = true
+}
+const submitCourseForm = async () => {
+  if (!courseFormRef.value) return
+  await courseFormRef.value.validate()
+  courseSubmitting.value = true
+  try {
+    const data = { name: courseForm.value.name, code: courseForm.value.code, credit: courseForm.value.credit, major: courseForm.value.major, description: courseForm.value.description }
+    isEditCourse.value ? await updateCourse(courseForm.value.id, data) : await addCourse(data)
+    ElMessage.success(isEditCourse.value ? '修改成功' : '添加成功')
+    showCourseDialog.value = false
+    fetchCourses()
+  } catch (e) { ElMessage.error(isEditCourse.value ? '修改失败' : '添加失败') }
+  finally { courseSubmitting.value = false }
+}
+const handleDeleteCourse = async (row) => {
+  try {
+    await ElMessageBox.confirm(`确定删除课程「${row.name}」吗？删除后已录入的该课程成绩不会消失。`, '确认', { type: 'warning' })
+    await deleteCourse(row.id)
+    ElMessage.success('删除成功')
+    fetchCourses()
+  } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') }
+}
 
+// ========== Excel 导入 ==========
 const handleExcelImport = (file) => {
   const reader = new FileReader()
   reader.onload = (e) => {
@@ -383,7 +504,6 @@ const handleExcelImport = (file) => {
   }
   reader.readAsBinaryString(file.raw)
 }
-
 const confirmImport = async () => {
   importLoading.value = true
   try {
@@ -395,6 +515,7 @@ const confirmImport = async () => {
   finally { importLoading.value = false }
 }
 
+// ========== 导出 ==========
 const handleExport = () => {
   if (!filteredGrades.value.length) { ElMessage.warning('没有数据'); return }
   const data = filteredGrades.value.map((g, i) => ({
@@ -409,7 +530,6 @@ const handleExport = () => {
   XLSX.writeFile(wb, `成绩导出_${new Date().toISOString().slice(0,10)}.xlsx`)
   ElMessage.success(`导出 ${data.length} 条`)
 }
-
 const exportClassGrades = () => {
   if (!filteredClassGrades.value.length) { ElMessage.warning('没有数据'); return }
   const data = filteredClassGrades.value.map((g, i) => ({
@@ -424,7 +544,7 @@ const exportClassGrades = () => {
   ElMessage.success(`导出 ${data.length} 条`)
 }
 
-onMounted(() => { fetchData(); fetchDist() })
+onMounted(() => { fetchData(); fetchDist(); setTimeout(fetchCourses, 0) })
 </script>
 
 <style scoped>
@@ -432,20 +552,14 @@ onMounted(() => { fetchData(); fetchDist() })
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
 .page-title { font-size: 22px; color: #1e293b; font-weight: 700; margin: 0 0 4px; }
 .page-desc { font-size: 14px; color: #94a3b8; margin: 0; }
-
+.header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .stats-row { margin-bottom: 16px; }
 .stat-card { border-radius: 8px; text-align: center; }
 .stat-card :deep(.el-card__body) { padding: 14px 10px; }
 .stat-value { font-size: 24px; font-weight: 700; }
 .stat-label { font-size: 12px; color: #64748b; margin-top: 2px; }
-
-/* Class Overview Cards */
 .class-overview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-bottom: 20px; }
-.class-overview-card {
-  background: #fff; border-radius: 10px; padding: 16px 18px;
-  border: 2px solid #e2e8f0; cursor: pointer;
-  transition: all 0.2s;
-}
+.class-overview-card { background: #fff; border-radius: 10px; padding: 16px 18px; border: 2px solid #e2e8f0; cursor: pointer; transition: all 0.2s; }
 .class-overview-card:hover { border-color: #1a56db; box-shadow: 0 4px 16px rgba(26,86,219,0.08); }
 .class-overview-card.active { border-color: #1a56db; box-shadow: 0 2px 12px rgba(26,86,219,0.15); background: #f8faff; }
 .cls-name { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
@@ -466,27 +580,22 @@ onMounted(() => { fetchData(); fetchDist() })
 .dot-medium { background: #d97706; }
 .dot-pass { background: #64748b; }
 .dot-fail { background: #dc2626; }
-
-/* Class Detail */
 .class-detail-card { border-radius: 10px; }
 .class-detail-card :deep(.el-card__header) { padding: 12px 20px; border-bottom: 1px solid #f1f5f9; }
 .class-detail-header { display: flex; align-items: center; justify-content: space-between; }
 .class-detail-title { font-size: 15px; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 6px; }
 .class-detail-count { font-size: 13px; color: #94a3b8; }
-.mini-toolbar { padding: 12px 20px; border-bottom: 1px solid #f1f5f9; }
+.mini-toolbar { padding: 12px 20px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .mini-result-count { margin-left: auto; font-size: 13px; color: #64748b; }
 .mini-result-count strong { color: #1a56db; }
-
-/* Toolbar */
 .toolbar-card { border-radius: 8px; margin-bottom: 16px; }
 .toolbar-card :deep(.el-card__body) { padding: 14px 20px; }
 .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .result-count { margin-left: auto; font-size: 14px; color: #64748b; }
 .result-count strong { color: #1a56db; }
-
 .table-card { border-radius: 8px; }
 .table-card :deep(.el-card__body) { padding: 0; }
-
 .import-info { font-size: 14px; color: #64748b; padding: 8px 0; }
 .import-more { text-align: center; font-size: 13px; color: #94a3b8; padding: 8px; }
+.course-mgr-toolbar { margin-bottom: 12px; }
 </style>

@@ -68,6 +68,20 @@ async function migrate() {
     `)
     console.log('✓ grades 表')
 
+    // ====== 4.5 课程表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS courses (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        code VARCHAR(20) UNIQUE,
+        credit INT DEFAULT 3,
+        major VARCHAR(100),
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ courses 表')
+
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_grades_student ON grades(student_id);
       CREATE INDEX IF NOT EXISTS idx_grades_semester ON grades(semester);
@@ -318,7 +332,7 @@ async function migrate() {
       `)
       console.log('  13 条考试日程')
     } else {
-      console.log(`  考试表已有 ${examCheck[0].c} 条记录，跳过种子`)
+      console.log(`  考试表已有 ${examCheck.rows[0].c} 条记录，跳过种子`)
     }
 
     // 统计

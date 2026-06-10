@@ -1,7 +1,11 @@
 import api from './index'
 
 export function getFiles(category) {
-  return api.get('/files', { params: category ? { category } : {} })
+  const params = {}
+  if (category && typeof category === 'string' && category.trim()) {
+    params.category = category.trim()
+  }
+  return api.get('/files', { params })
 }
 
 export function uploadFile(formData) {

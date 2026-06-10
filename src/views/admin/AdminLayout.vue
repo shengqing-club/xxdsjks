@@ -66,6 +66,11 @@
             <span>专业管理</span>
           </el-menu-item>
 
+          <el-menu-item index="/classes">
+            <el-icon><OfficeBuilding /></el-icon>
+            <span>班级管理</span>
+          </el-menu-item>
+
           <el-menu-item index="/announcements">
             <el-icon><Bell /></el-icon>
             <span>公告管理</span>
@@ -129,7 +134,8 @@ import {
   FolderOpened,
   Clock,
   TrophyBase,
-  Collection
+  Collection,
+  OfficeBuilding
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

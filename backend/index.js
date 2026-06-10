@@ -11,6 +11,8 @@ import fileRoutes from './routes/files.js'
 import examRoutes from './routes/exams.js'
 import notificationRoutes from './routes/notifications.js'
 import studyMaterialRoutes from './routes/study_materials.js'
+import courseRoutes from './routes/courses.js'
+import classRoutes from './routes/classes.js'
 
 const app = express()
 
@@ -28,6 +30,8 @@ app.use('/api/files', fileRoutes)
 app.use('/api/exams', examRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/study-materials', studyMaterialRoutes)
+app.use('/api/courses', courseRoutes)
+app.use('/api/classes', classRoutes)
 
 // 健康检查
 app.get('/api/health', async (req, res) => {

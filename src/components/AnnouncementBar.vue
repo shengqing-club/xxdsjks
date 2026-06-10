@@ -6,20 +6,40 @@ const announcements = ref([])
 const currentIndex = ref(0)
 let timer = null
 
-onMounted(async () => {
+const fetchAnnouncements = async () => {
   try {
     const res = await getActiveAnnouncements()
     announcements.value = res.data || res || []
-  } catch { /* 静默处理 */ }
+  } catch (e) {
+    console.error('公告刷新失败', e)
+  }
+}
+
+const startTimer = () => {
+  if (timer) clearInterval(timer)
   if (announcements.value.length > 1) {
     timer = setInterval(() => {
       currentIndex.value = (currentIndex.value + 1) % announcements.value.length
     }, 5000)
   }
+}
+
+const refresh = async () => {
+  currentIndex.value = 0
+  await fetchAnnouncements()
+  startTimer()
+}
+
+onMounted(async () => {
+  await refresh()
+  window.addEventListener('announcement-changed', refresh)
+  // 保底：每30秒自动刷新一次
+  timer = setInterval(() => { fetchAnnouncements(); startTimer() }, 30000)
 })
 
 onBeforeUnmount(() => {
-  clearInterval(timer)
+  if (timer) clearInterval(timer)
+  window.removeEventListener('announcement-changed', refresh)
 })
 </script>
 

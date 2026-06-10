@@ -153,13 +153,13 @@ router.get('/stats/distribution', adminMiddleware, async (req, res) => {
       FROM grades
     `)
     const r = result.rows[0]
-    res.json([
-      { label: '优秀 (90-100)', count: Number(r.excellent) },
-      { label: '良好 (80-89)', count: Number(r.good) },
-      { label: '中等 (70-79)', count: Number(r.medium) },
-      { label: '及格 (60-69)', count: Number(r.pass) },
-      { label: '不及格 (<60)', count: Number(r.fail) },
-    ])
+    res.json({
+      excellent: Number(r.excellent) || 0,
+      good: Number(r.good) || 0,
+      medium: Number(r.medium) || 0,
+      pass: Number(r.pass) || 0,
+      fail: Number(r.fail) || 0,
+    })
   } catch (e) {
     res.status(500).json({ message: '获取统计失败' })
   }

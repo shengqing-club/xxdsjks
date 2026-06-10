@@ -53,6 +53,7 @@ router.get('/', async (req, res) => {
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: '请选择文件' })
+    console.log('[UPLOAD-DEBUG] file:', req.file.originalname, 'size:', req.file.size, 'buffer type:', typeof req.file.buffer, 'buffer length:', req.file.buffer?.length)
 
     const { title, course_name, class_name } = req.body
     if (!title) return res.status(400).json({ message: '请输入资料标题' })
@@ -80,6 +81,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         req.file.buffer
       ]
     )
+    console.log('[UPLOAD-DEBUG] inserted id:', result.rows[0].id, 'file_data length:', result.rows[0].file_data?.length)
 
     // 如果指定了班级，给该班所有学生发通知
     if (class_name) {
@@ -102,7 +104,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
+    console.error('[UPLOAD-ERROR]', e)
     res.status(500).json({ message: '上传失败: ' + e.message })
   }
 })

@@ -36,11 +36,38 @@
         </el-form-item>
 
         <el-form-item label="专业" prop="major">
-          <el-input v-model="form.major" placeholder="请输入专业" clearable />
+          <el-select
+            v-model="form.major"
+            placeholder="请选择专业"
+            clearable
+            filterable
+            style="width: 100%"
+            @change="onMajorChange"
+          >
+            <el-option
+              v-for="m in majorOptions"
+              :key="m.id"
+              :label="m.name"
+              :value="m.name"
+            />
+          </el-select>
         </el-form-item>
 
         <el-form-item label="班级" prop="className">
-          <el-input v-model="form.className" placeholder="请输入班级" clearable />
+          <el-select
+            v-model="form.className"
+            placeholder="请先选择专业"
+            clearable
+            style="width: 100%"
+            :disabled="!classOptions.length"
+          >
+            <el-option
+              v-for="c in classOptions"
+              :key="c"
+              :label="c"
+              :value="c"
+            />
+          </el-select>
         </el-form-item>
 
         <el-form-item>
@@ -55,9 +82,11 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { addStudent } from '../../api/student'
+import { getMajors } from '../../api/major'
+import { getClasses } from '../../api/class'
 
 const formRef = ref(null)
 const submitting = ref(false)
@@ -70,6 +99,9 @@ const form = reactive({
   major: '',
   className: ''
 })
+
+const majorOptions = ref([])
+const classOptions = ref([])
 
 const rules = {
   studentId: [
@@ -85,11 +117,37 @@ const rules = {
     { required: true, message: '请选择性别', trigger: 'change' }
   ],
   major: [
-    { required: true, message: '请输入专业', trigger: 'blur' }
+    { required: true, message: '请选择专业', trigger: 'change' }
   ],
   className: [
-    { required: true, message: '请输入班级', trigger: 'blur' }
+    { required: true, message: '请选择班级', trigger: 'change' }
   ]
+}
+
+const onMajorChange = async () => {
+  form.className = ''  // 清空已选班级
+  const selected = majorOptions.value.find(m => m.name === form.major)
+  if (selected && selected.id) {
+    try {
+      const res = await getClasses({ major_id: selected.id })
+      const data = res.data || res || []
+      classOptions.value = data.map(c => c.name)
+    } catch (e) {
+      classOptions.value = []
+    }
+  } else {
+    classOptions.value = []
+  }
+}
+
+const fetchMajors = async () => {
+  try {
+    const res = await getMajors()
+    majorOptions.value = res.data || res || []
+  } catch (e) {
+    ElMessage.error('获取专业列表失败')
+    console.error(e)
+  }
 }
 
 const handleSubmit = async () => {
@@ -120,6 +178,10 @@ const handleReset = () => {
     formRef.value.resetFields()
   }
 }
+
+onMounted(() => {
+  fetchMajors()
+})
 </script>
 
 <style scoped>

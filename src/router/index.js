@@ -19,6 +19,7 @@ const routes = [
       { path: 'grades', name: 'GradeManagement', component: () => import('../views/admin/GradeManagement.vue') },
       { path: 'ranking', name: 'GradeRanking', component: () => import('../views/admin/GradeRanking.vue') },
       { path: 'majors', name: 'MajorManagement', component: () => import('../views/admin/MajorManagement.vue') },
+      { path: 'classes', name: 'ClassManagement', component: () => import('../views/admin/ClassManagement.vue') },
       { path: 'announcements', name: 'AnnouncementManagement', component: () => import('../views/admin/AnnouncementManagement.vue') },
       { path: 'files', name: 'FileManagement', component: () => import('../views/admin/FileManagement.vue') },
       { path: 'exams', name: 'ExamManagement', component: () => import('../views/admin/ExamManagement.vue') },

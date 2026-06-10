@@ -221,6 +221,8 @@ const submitForm = async () => {
     }
     dialogVisible.value = false
     fetchData()
+    // 通知公告栏刷新
+    window.dispatchEvent(new CustomEvent('announcement-changed'))
   } catch (e) {
     ElMessage.error(isEdit.value ? '修改失败' : '发布失败')
     console.error(e)
@@ -239,6 +241,8 @@ const handleDelete = async (row) => {
     await deleteAnnouncement(row.id)
     ElMessage.success('删除成功')
     fetchData()
+    // 通知公告栏刷新
+    window.dispatchEvent(new CustomEvent('announcement-changed'))
   } catch (e) {
     if (e !== 'cancel') {
       ElMessage.error('删除失败')

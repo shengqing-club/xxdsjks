@@ -24,10 +24,10 @@ router.get('/', authMiddleware, async (req, res) => {
 // 管理员：新增专业
 router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { name, code, description } = req.body
+    const { name, code, description, class_names } = req.body
     const result = await pool.query(
-      `INSERT INTO majors (name, code, description) VALUES ($1,$2,$3) RETURNING *`,
-      [name, code, description || '']
+      `INSERT INTO majors (name, code, description, class_names) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [name, code, description || '', class_names || '']
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
@@ -39,10 +39,10 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
 // 管理员：更新专业
 router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { name, code, description } = req.body
+    const { name, code, description, class_names } = req.body
     const result = await pool.query(
-      `UPDATE majors SET name=$1, code=$2, description=$3 WHERE id=$4 RETURNING *`,
-      [name, code, description, req.params.id]
+      `UPDATE majors SET name=$1, code=$2, description=$3, class_names=$4 WHERE id=$5 RETURNING *`,
+      [name, code, description || '', class_names || '', req.params.id]
     )
     if (result.rows.length === 0) return res.status(404).json({ message: '专业不存在' })
     res.json(result.rows[0])

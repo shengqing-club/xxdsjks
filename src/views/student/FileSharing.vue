@@ -224,7 +224,7 @@ const handleDownload = async (row) => {
 const formatSize = (bytes) => {
   if (!bytes) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB']
-  let i = 0, size = bytes
+  let i = 0, size = Number(bytes) || 0
   while (size >= 1024 && i < units.length - 1) { size /= 1024; i++ }
   return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i]
 }

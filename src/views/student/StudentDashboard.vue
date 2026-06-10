@@ -6,7 +6,7 @@ import { getStudentByStudentId } from '../../api/student'
 import { getGradesByStudent } from '../../api/grade'
 import { getAnnouncements } from '../../api/announcement'
 import { getNotifications, getUnreadCount } from '../../api/notification'
-import { getStudyMaterials, uploadStudyMaterial, deleteStudyMaterial } from '../../api/study_material'
+import { getStudyMaterials, uploadStudyMaterial, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
 import { getUpcomingExams } from '../../api/exam'
 import { normalizeDate, formatTimeRange, getExamStatus } from '../../utils/exam'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -153,8 +153,39 @@ const handleDeleteMaterial = async (material) => {
 }
 
 // ============ 下载复习资料 ============
-const handleDownload = (material) => {
-  window.open(`http://localhost:8081/api/study-materials/download/${material.id}`, '_blank')
+const handleDownload = async (material) => {
+  try {
+    ElMessage.info('正在下载，请稍候...')
+    const res = await downloadStudyMaterial(material.id)
+    // axios 设置 responseType: 'blob' 后，res.data 就是 Blob
+    const blob = res.data
+    if (!blob || blob.size === 0) {
+      ElMessage.error('下载失败：文件内容为空')
+      return
+    }
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = material.file_name || material.title || 'download'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('下载完成')
+  } catch (e) {
+    // 如果响应是 blob 形式的错误信息，尝试解析
+    if (e.response?.data instanceof Blob) {
+      const text = await e.response.data.text()
+      try {
+        const json = JSON.parse(text)
+        ElMessage.error('下载失败：' + (json.message || '未知错误'))
+      } catch {
+        ElMessage.error('下载失败：' + text)
+      }
+    } else {
+      ElMessage.error('下载失败：' + (e.message || '网络错误'))
+    }
+  }
 }
 
 // ============ 上传复习资料 ============
