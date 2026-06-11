@@ -186,11 +186,13 @@ router.get('/download/:message_id', async (req, res) => {
       return res.status(404).json({ message: '文件内容已丢失' })
     }
 
+    const fileBuffer = Buffer.isBuffer(msg.file_data) ? msg.file_data : Buffer.from(msg.file_data)
+
     res.setHeader('Content-Type', 'application/octet-stream')
     const encodedName = encodeURIComponent(msg.file_name || 'download').replace(/['()]/g, escape)
     res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
-    res.setHeader('Content-Length', msg.file_size)
-    res.send(msg.file_data)
+    res.setHeader('Content-Length', fileBuffer.length)
+    res.end(fileBuffer)
   } catch (e) {
     console.error(e)
     res.status(500).json({ message: '下载失败' })

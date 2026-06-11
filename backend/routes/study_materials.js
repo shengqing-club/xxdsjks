@@ -142,12 +142,17 @@ router.get('/download/:id', async (req, res) => {
       return res.status(404).json({ message: '文件内容已丢失' })
     }
 
+    // 确保 file_data 是 Buffer
+    const fileBuffer = Buffer.isBuffer(material.file_data)
+      ? material.file_data
+      : Buffer.from(material.file_data)
+
     res.setHeader('Content-Type', material.file_type || 'application/octet-stream')
     // RFC 6266: ASCII 回退 + UTF-8 编码文件名
     const encodedName = encodeURIComponent(material.file_name || 'download').replace(/['()]/g, escape)
     res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
-    res.setHeader('Content-Length', material.file_size)
-    res.send(material.file_data)
+    res.setHeader('Content-Length', fileBuffer.length)
+    res.end(fileBuffer)
   } catch (e) {
     console.error(e)
     res.status(500).json({ message: '下载失败' })
