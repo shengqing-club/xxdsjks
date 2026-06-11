@@ -34,7 +34,7 @@ export function getGenderStats() {
 }
 
 export function getMajorsList() {
-  return api.get('/students/majors/list')
+  return api.get('/majors')
 }
 
 // 密码管理

@@ -249,10 +249,10 @@ const submitForm = async () => {
   submitLoading.value = true
   try {
     const data = {
-      student_id: form.value.studentId,
-      course_name: form.value.courseName,
+      studentId: form.value.studentId,
+      courseName: form.value.courseName,
       score: form.value.score,
-      course_type: form.value.courseType,
+      courseType: form.value.courseType,
       semester: form.value.semester,
     }
     if (isEdit.value) {

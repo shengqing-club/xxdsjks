@@ -38,16 +38,31 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
 
 // 管理员：更新专业
 router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  const client = await pool.connect()
   try {
     const { name, code, description, class_names } = req.body
-    const result = await pool.query(
+    // 先查旧名称
+    const oldRes = await client.query('SELECT name FROM majors WHERE id=$1', [req.params.id])
+    if (oldRes.rows.length === 0) return res.status(404).json({ message: '专业不存在' })
+    const oldName = oldRes.rows[0].name
+
+    await client.query('BEGIN')
+    const result = await client.query(
       `UPDATE majors SET name=$1, code=$2, description=$3, class_names=$4 WHERE id=$5 RETURNING *`,
       [name, code, description || '', class_names || '', req.params.id]
     )
-    if (result.rows.length === 0) return res.status(404).json({ message: '专业不存在' })
+    // 如果专业名称变更，同步更新 students.major
+    if (oldName !== name) {
+      await client.query('UPDATE students SET major=$1 WHERE major=$2', [name, oldName])
+    }
+    await client.query('COMMIT')
     res.json(result.rows[0])
   } catch (e) {
+    await client.query('ROLLBACK').catch(() => {})
+    console.error('更新专业失败:', e)
     res.status(500).json({ message: '更新失败' })
+  } finally {
+    client.release()
   }
 })
 

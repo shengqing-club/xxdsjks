@@ -79,11 +79,15 @@
         </el-form-item>
         <el-form-item label="年龄" prop="age"><el-input-number v-model="editForm.age" :min="1" :max="100" /></el-form-item>
         <el-form-item label="专业" prop="major">
-          <el-select v-model="editForm.major" filterable allow-create style="width:100%">
+          <el-select v-model="editForm.major" filterable allow-create style="width:100%" @change="handleMajorChange">
             <el-option v-for="m in majorList" :key="m" :label="m" :value="m" />
           </el-select>
         </el-form-item>
-        <el-form-item label="班级" prop="className"><el-input v-model="editForm.className" /></el-form-item>
+        <el-form-item label="班级" prop="className">
+          <el-select v-model="editForm.className" filterable allow-create style="width:100%" placeholder="请先选择专业再选班级">
+            <el-option v-for="c in filteredClassOptions" :key="c.id" :label="c.name" :value="c.name" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="状态"><el-select v-model="editForm.status" style="width:100%">
           <el-option v-for="s in ['在读','休学','毕业','退学']" :key="s" :label="s" :value="s" />
         </el-select></el-form-item>
@@ -122,10 +126,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, RefreshRight, Edit, Delete, Key } from '@element-plus/icons-vue'
 import { getStudents, updateStudent, deleteStudent, resetStudentPassword, batchResetPassword, getMajorsList } from '../../api/student'
+import { getClasses } from '../../api/class'
 
 const loading = ref(false)
 const students = ref([])
@@ -134,6 +139,7 @@ const majorFilter = ref('')
 const statusFilter = ref('')
 const filteredStudents = ref([])
 const majorList = ref([])
+const allClasses = ref([])
 
 const tableRef = ref(null)
 const selectedRows = ref([])
@@ -149,9 +155,15 @@ const editRules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
   age: [{ required: true, message: '请输入年龄', trigger: 'blur' }],
-  major: [{ required: true, message: '请输入专业', trigger: 'blur' }],
-  className: [{ required: true, message: '请输入班级', trigger: 'blur' }]
+  major: [{ required: true, message: '请选择专业', trigger: 'change' }],
+  className: [{ required: true, message: '请选择班级', trigger: 'change' }]
 }
+
+// 根据当前选择的专业过滤班级列表
+const filteredClassOptions = computed(() => {
+  if (!editForm.value.major || allClasses.value.length === 0) return allClasses.value
+  return allClasses.value.filter(c => c.major_name === editForm.value.major)
+})
 
 const pwdDialogVisible = ref(false)
 const pwdLoading = ref(false)
@@ -162,13 +174,22 @@ const getStatusType = (s) => ({ '在读': 'success', '休学': 'warning', '毕�
 const fetchData = async () => {
   loading.value = true
   try {
-    const [sRes, mRes] = await Promise.all([getStudents(), getMajorsList()])
-    // axios 响应结构：sRes.data 才是实际数据
+    const [sRes, mRes, cRes] = await Promise.all([getStudents(), getMajorsList(), getClasses({})])
     students.value = sRes.data || []
     majorList.value = (mRes.data || []).map(m => m.name).filter(Boolean)
+    allClasses.value = cRes.data || cRes || []
     filteredStudents.value = [...students.value]
-    console.log('[AllStudents] 加载学生数:', students.value.length)
+    console.log('[AllStudents] 加载学生数:', students.value.length, '班级数:', allClasses.value.length)
   } catch (e) { ElMessage.error('获取数据失败'); console.error(e) } finally { loading.value = false }
+}
+
+// 单独刷新专业/班级下拉选项（新增专业/班级后打开编辑框时调用）
+const refreshOptions = async () => {
+  try {
+    const [mRes, cRes] = await Promise.all([getMajorsList(), getClasses({})])
+    majorList.value = (mRes.data || []).map(m => m.name).filter(Boolean)
+    allClasses.value = cRes.data || cRes || []
+  } catch (e) { console.error('刷新选项失败', e) }
 }
 
 const handleSearch = () => {
@@ -218,11 +239,17 @@ const handleBatchResetPwd = async () => {
 }
 
 const handleEdit = (row) => {
+  refreshOptions() // 打开编辑框时刷新专业/班级列表，确保看到新增项
   editForm.value = {
     id: row.id, studentId: row.student_id, name: row.name, gender: row.gender,
     age: row.age, major: row.major, className: row.class_name, status: row.status || '在读'
   }
   editDialogVisible.value = true
+}
+
+// 专业改变时清空班级选择
+const handleMajorChange = () => {
+  editForm.value.className = ''
 }
 
 const submitEdit = async () => {

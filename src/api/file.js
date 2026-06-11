@@ -10,12 +10,16 @@ export function getFiles(category) {
 
 export function uploadFile(formData) {
   return api.post('/files/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
   })
 }
 
 export function downloadFile(id) {
-  return api.get(`/files/${id}/download`, { responseType: 'blob' })
+  return api.get(`/files/${id}/download`, {
+    responseType: 'blob',
+    timeout: 120000,
+  })
 }
 
 export function deleteFile(id) {
