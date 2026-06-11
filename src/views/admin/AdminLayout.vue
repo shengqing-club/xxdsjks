@@ -81,9 +81,29 @@
             <span>文件管理</span>
           </el-menu-item>
 
+          <el-menu-item index="/study-materials">
+            <el-icon><Reading /></el-icon>
+            <span>复习资料</span>
+          </el-menu-item>
+
+          <el-menu-item index="/groups">
+            <el-icon><User /></el-icon>
+            <span>分组管理</span>
+          </el-menu-item>
+
           <el-menu-item index="/exams">
             <el-icon><Clock /></el-icon>
             <span>考试管理</span>
+          </el-menu-item>
+
+          <el-menu-item index="/site-settings">
+            <el-icon><Setting /></el-icon>
+            <span>站点设置</span>
+          </el-menu-item>
+
+          <el-menu-item index="/rewards">
+            <el-icon><Trophy /></el-icon>
+            <span>奖惩管理</span>
           </el-menu-item>
 
           <el-sub-menu index="data-visual">
@@ -135,7 +155,11 @@ import {
   Clock,
   TrophyBase,
   Collection,
-  OfficeBuilding
+  OfficeBuilding,
+  Reading,
+  User,
+  Setting,
+  Trophy
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

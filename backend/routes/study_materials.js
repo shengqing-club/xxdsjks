@@ -25,24 +25,40 @@ const ensureFileDataColumn = async () => {
 }
 ensureFileDataColumn()
 
-// 获取复习资料列表
+// 获取复习资料列表（支持分页和搜索）
 router.get('/', async (req, res) => {
   try {
-    const { class_name, course_name } = req.query
-    let sql = 'SELECT id, title, file_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, created_at FROM study_materials WHERE 1=1'
+    const { class_name, course_name, keyword, page, pageSize } = req.query
+    let whereSql = 'WHERE 1=1'
     const params = []
     let idx = 1
     if (class_name) {
-      sql += ` AND class_name = $${idx++}`
+      whereSql += ` AND class_name = $${idx++}`
       params.push(class_name)
     }
     if (course_name) {
-      sql += ` AND course_name = $${idx++}`
+      whereSql += ` AND course_name = $${idx++}`
       params.push(course_name)
     }
-    sql += ' ORDER BY created_at DESC'
-    const result = await pool.query(sql, params)
-    res.json(result.rows)
+    if (keyword) {
+      whereSql += ` AND (file_name ILIKE $${idx++} OR title ILIKE $${idx++})`
+      params.push(`%${keyword}%`, `%${keyword}%`)
+    }
+
+    // 总数
+    const countResult = await pool.query(`SELECT COUNT(*) as total FROM study_materials ${whereSql}`, params)
+    const total = parseInt(countResult.rows[0].total)
+
+    // 分页查询 - 复制params用于分页，避免修改原数组
+    const queryParams = [...params]
+    let sql = `SELECT id, title, COALESCE(file_name, title, '未命名') as original_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, created_at FROM study_materials ${whereSql} ORDER BY created_at DESC`
+    if (page && pageSize) {
+      const offset = (parseInt(page) - 1) * parseInt(pageSize)
+      sql += ` LIMIT $${idx++} OFFSET $${idx++}`
+      queryParams.push(parseInt(pageSize), offset)
+    }
+    const result = await pool.query(sql, queryParams)
+    res.json({ list: result.rows, total })
   } catch (e) {
     console.error(e)
     res.status(500).json({ message: '获取复习资料失败' })

@@ -335,6 +335,72 @@ async function migrate() {
       console.log(`  考试表已有 ${examCheck.rows[0].c} 条记录，跳过种子`)
     }
 
+    // ====== 10. 分组表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS groups (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
+        description TEXT DEFAULT '',
+        class_name VARCHAR(100) NOT NULL,
+        created_by VARCHAR(50) NOT NULL,
+        leader_id VARCHAR(30),
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        disbanded_at TIMESTAMP
+      )
+    `)
+    console.log('✓ groups 表')
+
+    // ====== 11. 分组成员表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS group_members (
+        id SERIAL PRIMARY KEY,
+        group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+        student_id VARCHAR(30) NOT NULL,
+        student_name VARCHAR(50),
+        role VARCHAR(20) DEFAULT 'member',
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ group_members 表')
+
+    // ====== 12. 分组聊天消息表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS group_chat_messages (
+        id SERIAL PRIMARY KEY,
+        group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+        sender_id VARCHAR(30) NOT NULL,
+        sender_name VARCHAR(50) NOT NULL,
+        sender_role VARCHAR(10) DEFAULT 'student',
+        content TEXT NOT NULL,
+        message_type VARCHAR(20) DEFAULT 'text',
+        file_url VARCHAR(500),
+        file_name VARCHAR(255),
+        file_size BIGINT DEFAULT 0,
+        file_data BYTEA,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ group_chat_messages 表')
+
+    // ====== 13. 分组文件表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS group_files (
+        id SERIAL PRIMARY KEY,
+        group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+        file_name VARCHAR(255) NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        file_size BIGINT DEFAULT 0,
+        file_type VARCHAR(50),
+        uploader_id VARCHAR(30),
+        uploader_name VARCHAR(50),
+        file_data BYTEA,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ group_files 表')
+
     // 统计
     const { rows: stuCount } = await client.query('SELECT COUNT(*) as c FROM students')
     const { rows: grdCount } = await client.query('SELECT COUNT(*) as c FROM grades')

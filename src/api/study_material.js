@@ -7,9 +7,7 @@ export function getStudyMaterials(params) {
 
 // 上传复习资料
 export function uploadStudyMaterial(formData) {
-  return api.post('/study-materials/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+  return api.post('/study-materials/upload', formData)
 }
 
 // 删除复习资料

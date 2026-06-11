@@ -2,9 +2,13 @@ import { Router } from 'express'
 import pool from '../db.js'
 import bcrypt from 'bcryptjs'
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js'
+import xlsx from 'xlsx'
+import multer from 'multer'
 
 const router = Router()
 router.use(authMiddleware) // 所有路由都需要登录，管理路由单独加 adminMiddleware
+
+const upload = multer({ dest: 'uploads/' })
 
 // ====== 学生端接口（只需登录） ======
 
@@ -208,6 +212,78 @@ router.post('/batch-reset-password', adminMiddleware, async (req, res) => {
     res.json({ message: `已重置 ${results.length} 名学生密码`, results })
   } catch (e) {
     res.status(500).json({ message: '批量重置失败' })
+  }
+})
+
+// 批量导入学生（Excel）
+router.post('/import', adminMiddleware, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: '请上传文件' })
+
+    const workbook = xlsx.readFile(req.file.path)
+    const sheetName = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[sheetName]
+    const rows = xlsx.utils.sheet_to_json(worksheet, { header: 1 })
+
+    // 删除临时文件
+    import('fs').then(fs => fs.promises.unlink(req.file.path).catch(() => {}))
+
+    if (rows.length < 2) return res.status(400).json({ message: 'Excel文件为空或格式错误' })
+
+    const headers = rows[0].map(h => String(h).trim())
+    const required = ['学号', '姓名']
+    for (const h of required) {
+      if (!headers.includes(h)) return res.status(400).json({ message: `缺少必填列：${h}` })
+    }
+
+    const colMap = {}
+    headers.forEach((h, i) => { colMap[h] = i })
+
+    const success = []
+    const failed = []
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i]
+      if (!row.length || !row[colMap['学号']]) continue
+
+      const studentId = String(row[colMap['学号']] || '').trim()
+      const name = String(row[colMap['姓名']] || '').trim()
+      const gender = String(row[colMap['性别']] || '男').trim()
+      const age = parseInt(row[colMap['年龄']] || 18)
+      const major = String(row[colMap['专业']] || '').trim()
+      const className = String(row[colMap['班级']] || '').trim()
+      const status = String(row[colMap['状态']] || '在读').trim()
+      const password = String(row[colMap['密码']] || '123456').trim()
+
+      if (!studentId || !name) {
+        failed.push({ row: i + 1, reason: '学号或姓名为空' })
+        continue
+      }
+
+      try {
+        const hash = await bcrypt.hash(password, 10)
+        const result = await pool.query(
+          `INSERT INTO students (student_id, name, gender, age, major, class_name, status, password_hash)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT (student_id) DO UPDATE SET
+             name=$2, gender=$3, age=$4, major=$5, class_name=$6, status=$7, password_hash=$8, updated_at=CURRENT_TIMESTAMP
+           RETURNING student_id, name`,
+          [studentId, name, gender, age, major, className, status, hash]
+        )
+        success.push(result.rows[0])
+      } catch (e) {
+        failed.push({ row: i + 1, reason: e.message })
+      }
+    }
+
+    res.json({
+      message: `导入完成：成功 ${success.length} 条，失败 ${failed.length} 条`,
+      success,
+      failed
+    })
+  } catch (e) {
+    console.error('批量导入失败:', e)
+    res.status(500).json({ message: '导入失败：' + e.message })
   }
 })
 

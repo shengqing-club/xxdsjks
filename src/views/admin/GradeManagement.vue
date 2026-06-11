@@ -12,6 +12,10 @@
           <el-button type="success" plain @click="handleExport">
             <el-icon><Download /></el-icon>导出Excel
           </el-button>
+          <el-button :type="editingMode ? 'warning' : 'default'" @click="toggleEditMode">
+            <el-icon><Edit /></el-icon>
+            {{ editingMode ? '取消编辑' : '编辑管理' }}
+          </el-button>
         </div>
       </div>
 
@@ -44,7 +48,8 @@
 
     <!-- 成绩表格 -->
     <el-card shadow="never" class="table-card">
-      <el-table :data="pagedGrades" stripe style="width: 100%" row-key="id">
+      <el-table :data="pagedGrades" stripe style="width: 100%" row-key="id" @selection-change="selectedRows = $event">
+        <el-table-column v-if="editingMode" type="selection" width="50" />
         <el-table-column prop="student_id" label="学号" width="130" />
         <el-table-column prop="student_name" label="姓名" width="100" />
         <el-table-column prop="class_name" label="班级" width="130" />
@@ -67,12 +72,18 @@
             <el-button type="primary" size="small" text @click="handleEdit(row)">
               <el-icon><Edit /></el-icon>
             </el-button>
-            <el-button type="danger" size="small" text @click="handleDelete(row)">
+            <el-button v-if="editingMode" type="danger" size="small" text @click="handleDelete(row)">
               <el-icon><Delete /></el-icon>
             </el-button>
           </template>
         </el-table-column>
       </el-table>
+      <div v-if="editingMode" style="padding: 12px 20px; display: flex; justify-content: flex-end;">
+        <el-button type="danger" :disabled="selectedRows.length === 0" @click="handleBatchDelete">
+          <el-icon><Delete /></el-icon>
+          批量删除 ({{ selectedRows.length }})
+        </el-button>
+      </div>
       <!-- 分页 -->
       <div class="pagination-wrapper">
         <el-pagination
@@ -151,6 +162,32 @@ const isEdit = ref(false)
 const submitLoading = ref(false)
 const formRef = ref(null)
 const form = ref({ id: null, studentId: '', courseName: '', score: 75, courseType: '必修', semester: '' })
+
+const editingMode = ref(false)
+const selectedRows = ref([])
+
+const toggleEditMode = () => {
+  editingMode.value = !editingMode.value
+  if (!editingMode.value) selectedRows.value = []
+}
+
+const handleBatchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRows.value.length} 条成绩吗？此操作不可恢复。`,
+      '确认批量删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+    for (const row of selectedRows.value) {
+      await deleteGrade(row.id)
+    }
+    ElMessage.success(`成功删除 ${selectedRows.value.length} 条成绩`)
+    selectedRows.value = []
+    fetchData()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('批量删除失败')
+  }
+}
 
 const formRules = {
   studentId: [{ required: true, message: '请选择学生', trigger: 'change' }],

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../stores/auth'
 import { getStudentByStudentId } from '../../api/student'
@@ -9,6 +9,9 @@ import { getNotifications, getUnreadCount } from '../../api/notification'
 import { getStudyMaterials, uploadStudyMaterial, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
 import { getUpcomingExams } from '../../api/exam'
 import { normalizeDate, formatTimeRange, getExamStatus } from '../../utils/exam'
+import { getScrollingText, getFullscreenText } from '../../api/settings'
+import { getRewards } from '../../api/reward'
+import EasterEgg from '../../components/EasterEgg.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const { displayName, studentId } = useAuth()
@@ -19,7 +22,20 @@ const announcements = ref([])
 const notifications = ref([])
 const exams = ref([])
 const studyMaterials = ref([])
+const latestMaterials = ref([])
 const unreadCount = ref(0)
+const scrollingEnabled = ref(false)
+const scrollingContent = ref('')
+const scrollingMode = ref('normal')
+const fullscreenEnabled = ref(false)
+const fullscreenContent = ref('')
+const fullscreenFont = ref('serif')
+const rewardRecords = ref([])
+const easterEggRef = ref(null)
+
+const triggerEasterEgg = () => {
+  easterEggRef.value?.trigger()
+}
 
 const now = new Date()
 // 用本地时间取当天日期，避免 toISOString 的 UTC 偏移
@@ -135,10 +151,63 @@ const weekday = weekDays[now.getDay()]
 const fetchStudyMaterials = async () => {
   try {
     const res = await getStudyMaterials({ class_name: student.value?.class_name || '' })
-    studyMaterials.value = res.data || []
+    const list = res.data?.list || res.data || []
+    studyMaterials.value = list
+    // 取最近5条用于首页展示
+    latestMaterials.value = (Array.isArray(list) ? list : []).slice(0, 5)
   } catch (e) {
     console.warn('[Dashboard] 复习资料获取失败:', e.message)
     studyMaterials.value = []
+    latestMaterials.value = []
+  }
+}
+
+// ============ 相对时间格式化 ============
+const formatDateShort = (dateStr) => {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const now = new Date()
+  const diff = now - d
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  if (hours < 24) return `${hours}小时前`
+  if (days < 7) return `${days}天前`
+  return d.toLocaleDateString('zh-CN')
+}
+
+// ============ 获取奖惩记录 ============
+const fetchRewards = async () => {
+  try {
+    const res = await getRewards()
+    rewardRecords.value = (res.data || []).slice(0, 5)
+  } catch (e) {
+    console.warn('[Dashboard] 奖惩获取失败:', e.message)
+  }
+}
+
+// ============ 获取滚动字幕设置 ============
+const fetchScrollingText = async () => {
+  try {
+    const res = await getScrollingText()
+    scrollingEnabled.value = res.data.enabled
+    scrollingContent.value = res.data.content
+    scrollingMode.value = res.data.mode || 'normal'
+  } catch (e) {
+    console.warn('[Dashboard] 字幕设置获取失败:', e.message)
+  }
+}
+
+const fetchFullscreenText = async () => {
+  try {
+    const res = await getFullscreenText()
+    fullscreenEnabled.value = res.data.enabled
+    fullscreenContent.value = res.data.content
+    fullscreenFont.value = res.data.font || 'serif'
+  } catch (e) {
+    console.warn('[Dashboard] 全屏文字设置获取失败:', e.message)
   }
 }
 
@@ -212,6 +281,9 @@ const handleDownload = async (material) => {
 
 // ============ 上传复习资料 ============
 const uploadDialogVisible = ref(false)
+const notifDetailVisible = ref(false)
+const currentNotif = ref(null)
+const showNotifDetail = (item) => { currentNotif.value = item; notifDetailVisible.value = true }
 const uploadFormRef = ref(null)
 const uploadLoading = ref(false)
 const uploadFile = ref(null)
@@ -318,16 +390,46 @@ onMounted(async () => {
     // 6. 复习资料
     await fetchStudyMaterials()
 
+    // 7. 奖惩记录
+    await fetchRewards()
+
+    // 8. 滚动字幕设置
+    await fetchScrollingText()
+
+    // 9. 全屏文字设置
+    await fetchFullscreenText()
+
   } catch (e) {
     console.error('[Dashboard] 学生信息获取失败', e)
   } finally {
     loading.value = false
   }
 })
+
+// 每10秒轮询设置，管理端开启后学生端实时显示
+let scrollPolling = null
+let fullscreenPolling = null
+onMounted(() => {
+  scrollPolling = setInterval(fetchScrollingText, 10000)
+  fullscreenPolling = setInterval(fetchFullscreenText, 10000)
+})
+onUnmounted(() => {
+  if (scrollPolling) clearInterval(scrollPolling)
+  if (fullscreenPolling) clearInterval(fullscreenPolling)
+})
 </script>
 
 <template>
   <div v-loading="loading" class="dashboard">
+    <!-- 全屏文字覆盖 -->
+    <div v-if="fullscreenEnabled && fullscreenContent" class="fullscreen-overlay">
+      <div class="fullscreen-inner">
+        <div class="fullscreen-line"></div>
+        <div class="fullscreen-text-content" :class="fullscreenFont === 'kai' ? 'font-kai' : 'font-song'">{{ fullscreenContent }}</div>
+        <div class="fullscreen-line"></div>
+      </div>
+    </div>
+
     <!-- 考试中横幅 -->
     <el-alert
       v-if="ongoingExams.length"
@@ -372,31 +474,43 @@ onMounted(async () => {
       </template>
     </el-alert>
 
+    <!-- 滚动字幕横幅 -->
+    <div v-if="scrollingEnabled && scrollingContent" class="scrolling-banner" :class="scrollingMode === 'warning' ? 'banner-warning' : 'banner-normal'">
+      <div class="scrolling-text">{{ scrollingContent }}</div>
+    </div>
+
     <!-- Greeting -->
     <div class="page-header">
-      <h2>欢迎回来，{{ displayName }}</h2>
+      <h2 @dblclick="triggerEasterEgg" style="cursor: default; user-select: none;">欢迎回来，<span class="easter-trigger">{{ displayName }}</span></h2>
       <p class="date-info">{{ dateStr }} 星期{{ weekday }}</p>
     </div>
 
-    <!-- Stat cards -->
-    <div class="stat-grid">
-      <div class="stat-card stat-courses">
-        <div class="stat-icon"><el-icon :size="28"><Collection /></el-icon></div>
-        <div class="stat-body"><p class="stat-label">已修课程数</p><p class="stat-value">{{ courseCount }}</p></div>
+    <!-- 奖惩记录 -->
+    <el-card shadow="never" class="reward-card">
+      <template #header>
+        <div class="card-title-row">
+          <el-icon :size="18" color="#f59e0b"><Trophy /></el-icon>
+          <span class="card-title">奖惩记录</span>
+          <el-tag v-if="rewardRecords.length" size="small" type="warning" effect="plain">{{ rewardRecords.length }}条</el-tag>
+        </div>
+      </template>
+      <div v-if="rewardRecords.length" class="reward-list">
+        <div v-for="r in rewardRecords" :key="r.id" class="reward-item" :class="r.type === '奖励' ? 'reward-row' : 'punish-row'">
+          <div class="reward-left">
+            <el-tag :type="r.type === '奖励' ? 'success' : 'danger'" size="small" effect="dark" class="reward-type-tag">{{ r.type }}</el-tag>
+            <span class="reward-category">{{ r.category }}</span>
+            <span class="reward-reason">{{ r.reason }}</span>
+          </div>
+          <div class="reward-right">
+            <span class="reward-points" :style="{ color: r.type === '奖励' ? '#16a34a' : '#dc2626' }">
+              {{ r.type === '奖励' ? '+' : '' }}{{ r.points }}
+            </span>
+            <span class="reward-date">{{ r.created_at ? r.created_at.replace('T', ' ').substring(0, 10) : '' }}</span>
+          </div>
+        </div>
       </div>
-      <div class="stat-card stat-avg">
-        <div class="stat-icon"><el-icon :size="28"><TrendCharts /></el-icon></div>
-        <div class="stat-body"><p class="stat-label">平均分</p><p class="stat-value">{{ avgScore }}</p></div>
-      </div>
-      <div class="stat-card stat-max">
-        <div class="stat-icon"><el-icon :size="28"><Top /></el-icon></div>
-        <div class="stat-body"><p class="stat-label">最高分</p><p class="stat-value">{{ maxScore }}</p></div>
-      </div>
-      <div class="stat-card stat-min">
-        <div class="stat-icon"><el-icon :size="28"><Bottom /></el-icon></div>
-        <div class="stat-body"><p class="stat-label">最低分</p><p class="stat-value">{{ minScore }}</p></div>
-      </div>
-    </div>
+      <el-empty v-else description="暂无奖惩记录" :image-size="50" />
+    </el-card>
 
     <!-- 最新通知（公告 + 个人通知） -->
     <el-card shadow="never" class="announcement-card">
@@ -414,6 +528,8 @@ onMounted(async () => {
           :key="item.id"
           class="announcement-item"
           :class="{ 'notif-unread': !item.is_read }"
+          @click="showNotifDetail(item)"
+          style="cursor: pointer"
         >
           <div class="ann-left">
             <el-tag
@@ -483,34 +599,25 @@ onMounted(async () => {
         <div class="card-title-row">
           <el-icon :size="18" color="#10b981"><Document /></el-icon>
           <span class="card-title">复习资料</span>
-          <el-tag v-if="studyMaterials.length" size="small" type="success" effect="plain" style="margin-left: auto;">{{ studyMaterials.length }}份</el-tag>
+          <el-tag v-if="latestMaterials.length" size="small" type="warning" effect="plain">最新{{ latestMaterials.length }}条</el-tag>
           <el-button type="primary" size="small" @click="handleOpenUpload" style="margin-left: 8px;">
             <el-icon><Upload /></el-icon>
             上传资料
           </el-button>
         </div>
       </template>
-      <div v-if="studyMaterials.length" class="material-list">
-        <div v-for="mat in studyMaterials" :key="mat.id" class="material-item">
+      <div v-if="latestMaterials.length" class="material-list">
+        <div v-for="mat in latestMaterials" :key="mat.id" class="material-item">
           <div class="mat-left">
             <el-icon :size="20" color="#1a56db"><Document /></el-icon>
-            <span class="mat-title">{{ mat.title }}</span>
+            <span class="mat-title">{{ mat.original_name || mat.file_name || mat.title || '-' }}</span>
             <el-tag v-if="mat.course_name" size="small" type="info" effect="plain">{{ mat.course_name }}</el-tag>
           </div>
           <div class="mat-right">
-            <span class="mat-uploader">上传者: {{ mat.uploader_name || '--' }}</span>
-            <span class="mat-date">{{ mat.created_at ? mat.created_at.slice(0, 10) : '' }}</span>
+            <span class="mat-uploader">{{ mat.uploader_name }}</span>
+            <span class="mat-date" style="color: #f59e0b; font-weight: 500;">{{ formatDateShort(mat.created_at) }}</span>
             <el-button type="primary" link size="small" @click="handleDownload(mat)">
               <el-icon><Download /></el-icon>下载
-            </el-button>
-            <el-button
-              v-if="mat.uploader_role === 'admin' || mat.uploader_id === studentId"
-              type="danger"
-              link
-              size="small"
-              @click="handleDeleteMaterial(mat)"
-            >
-              <el-icon><Delete /></el-icon>删除
             </el-button>
           </div>
         </div>
@@ -562,6 +669,20 @@ onMounted(async () => {
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 通知详情对话框 -->
+    <el-dialog v-model="notifDetailVisible" :title="currentNotif?.title || '通知详情'" width="500px">
+      <div v-if="currentNotif" class="notif-detail">
+        <div class="notif-detail-meta">
+          <el-tag :type="getAnnouncementTagType(currentNotif.tagType)" size="small">{{ currentNotif.tagType }}</el-tag>
+          <span class="notif-detail-time">{{ formatTime(currentNotif.time) }}</span>
+        </div>
+        <div class="notif-detail-content">{{ currentNotif.content }}</div>
+      </div>
+    </el-dialog>
+
+    <!-- 彩蛋 -->
+    <EasterEgg ref="easterEggRef" />
   </div>
 </template>
 
@@ -575,33 +696,39 @@ onMounted(async () => {
 
 /* Page header */
 .page-header { margin-bottom: 20px; }
+.easter-trigger {
+  cursor: pointer;
+  transition: color 0.2s;
+  border-bottom: 2px dashed transparent;
+}
+.easter-trigger:hover {
+  color: #f59e0b;
+  border-bottom-color: #f59e0b;
+}
 .page-header h2 { font-size: 22px; font-weight: 700; color: #1e293b; margin: 0 0 4px; }
 .date-info { font-size: 14px; color: #94a3b8; margin: 0; }
 
-/* Stat grid */
-.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px; }
-.stat-card {
-  background: #fff; border-radius: 8px; padding: 20px;
-  display: flex; align-items: center; gap: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-  border-left: 4px solid transparent;
-  transition: box-shadow 0.2s;
+/* 奖惩记录 */
+.reward-card { border-radius: 8px; border: none; margin-bottom: 20px; }
+.reward-card :deep(.el-card__header) { padding: 14px 20px; border-bottom: 1px solid #f1f5f9; }
+.reward-card :deep(.el-card__body) { padding: 0; }
+.reward-list { }
+.reward-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid #f8fafc;
+  transition: background 0.15s;
 }
-.stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-.stat-courses { border-left-color: #1a56db; }
-.stat-avg { border-left-color: #10b981; }
-.stat-max { border-left-color: #f59e0b; }
-.stat-min { border-left-color: #ef4444; }
-.stat-icon {
-  width: 56px; height: 56px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-}
-.stat-courses .stat-icon { background: #eff6ff; color: #1a56db; }
-.stat-avg .stat-icon { background: #ecfdf5; color: #10b981; }
-.stat-max .stat-icon { background: #fffbeb; color: #f59e0b; }
-.stat-min .stat-icon { background: #fef2f2; color: #ef4444; }
-.stat-label { font-size: 13px; color: #94a3b8; margin: 0 0 4px; }
-.stat-value { font-size: 28px; font-weight: 700; color: #1e293b; margin: 0; line-height: 1.1; }
+.reward-item:last-child { border-bottom: none; }
+.reward-item:hover { background: #f8fafc; }
+.reward-row { border-left: 3px solid #16a34a; }
+.punish-row { border-left: 3px solid #dc2626; }
+.reward-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.reward-type-tag { flex-shrink: 0; }
+.reward-category { font-size: 13px; color: #64748b; flex-shrink: 0; font-weight: 500; }
+.reward-reason { font-size: 14px; color: #334155; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reward-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; margin-left: 12px; }
+.reward-points { font-size: 15px; font-weight: 700; }
+.reward-date { font-size: 12px; color: #94a3b8; }
 
 /* Exam reminder banner */
 .exam-reminder-list { margin-top: 8px; }
@@ -688,4 +815,84 @@ onMounted(async () => {
 .mat-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; font-size: 12px; color: #94a3b8; }
 .mat-uploader { }
 .mat-date { }
+
+/* 滚动字幕横幅 */
+.scrolling-banner {
+  width: 100%;
+  height: 40px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  position: relative;
+}
+.banner-normal {
+  background: linear-gradient(90deg, #1a56db, #1e40af);
+}
+.banner-warning {
+  background: linear-gradient(90deg, #dc2626, #b91c1c);
+  animation: warningPulse 2s ease-in-out infinite;
+}
+@keyframes warningPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+.scrolling-text {
+  white-space: nowrap;
+  padding-left: 100%;
+  animation: scroll-left 20s linear infinite;
+  font-size: 14px;
+  font-family: 'KaiTi', 'STKaiti', '楷体', serif;
+}
+@keyframes scroll-left {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+/* 全屏文字覆盖层 */
+.fullscreen-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  z-index: 9999;
+  background: linear-gradient(135deg, #1a56db 0%, #1e40af 50%, #312e81 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fullscreen-inner {
+  text-align: center;
+  padding: 80px 120px;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 48px;
+}
+.fullscreen-line {
+  width: 160px;
+  height: 2px;
+  background: rgba(255,255,255,0.35);
+}
+.fullscreen-text-content {
+  font-size: clamp(36px, 5.5vw, 64px);
+  color: #fff;
+  font-weight: 600;
+  line-height: 2.2;
+  white-space: pre-wrap;
+  letter-spacing: 12px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.15);
+}
+.font-song {
+  font-family: 'SimSun', 'STSong', '宋体', 'Noto Serif CJK SC', serif;
+}
+.font-kai {
+  font-family: 'KaiTi', 'STKaiti', '楷体', 'Noto Serif CJK SC', serif;
+}
+
+.notif-detail-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.notif-detail-time { font-size: 13px; color: #94a3b8; }
+.notif-detail-content { font-size: 14px; color: #334155; line-height: 1.8; white-space: pre-wrap; }
 </style>

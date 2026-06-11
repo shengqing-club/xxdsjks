@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuth } from '../../stores/auth'
+import { DataBoard, Calendar, User, Document, Trophy, OfficeBuilding, FolderOpened, Lock, SwitchButton, ChatDotRound, Reading } from '@element-plus/icons-vue'
 import AnnouncementBar from '../../components/AnnouncementBar.vue'
 import ChatRoom from '../../views/ChatRoom.vue'
 import NotificationCenter from '../../components/NotificationCenter.vue'
@@ -81,6 +82,14 @@ const handleLogout = async () => {
           <el-menu-item index="/student/files">
             <el-icon><FolderOpened /></el-icon>
             <span>文件共享</span>
+          </el-menu-item>
+          <el-menu-item index="/student/study-materials">
+            <el-icon><Reading /></el-icon>
+            <span>复习资料</span>
+          </el-menu-item>
+          <el-menu-item index="/student/groups">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>我的分组</span>
           </el-menu-item>
           <el-menu-item index="/student/password">
             <el-icon><Lock /></el-icon>

@@ -6,6 +6,10 @@
         <h2 class="page-title">文件管理</h2>
         <p class="page-desc">上传、管理和共享文件资源</p>
       </div>
+      <el-button :type="editingMode ? 'warning' : 'default'" @click="toggleEditMode">
+        <el-icon><Edit /></el-icon>
+        {{ editingMode ? '取消编辑' : '编辑管理' }}
+      </el-button>
     </div>
 
     <!-- Settings + Toolbar -->
@@ -84,7 +88,8 @@
 
     <!-- File Table -->
     <el-card shadow="never" class="table-card">
-      <el-table :data="files" stripe style="width: 100%">
+      <el-table :data="files" stripe style="width: 100%" @selection-change="selectedRows = $event">
+        <el-table-column v-if="editingMode" type="selection" width="50" />
         <el-table-column label="文件名" min-width="220">
           <template #default="{ row }">
             <div class="file-name">
@@ -125,12 +130,19 @@
               <el-icon><Download /></el-icon>
               下载
             </el-button>
-            <el-button type="danger" size="small" @click="handleDelete(row)">
+            <el-button v-if="editingMode" type="danger" size="small" @click="handleDelete(row)">
               <el-icon><Delete /></el-icon>
+              删除
             </el-button>
           </template>
         </el-table-column>
       </el-table>
+      <div v-if="editingMode" style="margin-top: 12px; display: flex; justify-content: flex-end;">
+        <el-button type="danger" :disabled="selectedRows.length === 0" @click="handleBatchDelete">
+          <el-icon><Delete /></el-icon>
+          批量删除 ({{ selectedRows.length }})
+        </el-button>
+      </div>
     </el-card>
   </div>
 </template>
@@ -138,13 +150,15 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled, Download, Delete, Document, Picture, VideoPlay, Headset, Files } from '@element-plus/icons-vue'
+import { UploadFilled, Download, Delete, Edit, Document, Picture, VideoPlay, Headset, Files } from '@element-plus/icons-vue'
 import { getFiles, uploadFile, downloadFile, deleteFile, getStudentUploadSetting, setStudentUploadSetting } from '../../api/file'
 
 const loading = ref(false)
 const files = ref([])
 const filterCategory = ref('')
 const studentUploadEnabled = ref(false)
+const editingMode = ref(false)
+const selectedRows = ref([])
 
 // Upload dialog
 const uploadDialogVisible = ref(false)
@@ -152,6 +166,29 @@ const uploading = ref(false)
 const uploadRef = ref(null)
 const uploadFileList = ref([])
 const uploadForm = ref({ category: 'general', description: '' })
+
+const toggleEditMode = () => {
+  editingMode.value = !editingMode.value
+  if (!editingMode.value) selectedRows.value = []
+}
+
+const handleBatchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedRows.value.length} 个文件吗？此操作不可恢复。`,
+      '确认批量删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+    for (const row of selectedRows.value) {
+      await deleteFile(row.id)
+    }
+    ElMessage.success(`成功删除 ${selectedRows.value.length} 个文件`)
+    selectedRows.value = []
+    fetchData()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('批量删除失败')
+  }
+}
 
 const fetchData = async () => {
   loading.value = true
@@ -304,7 +341,7 @@ onMounted(() => {
 
 <style scoped>
 .file-page { max-width: 1200px; margin: 0 auto; }
-.page-header { margin-bottom: 20px; }
+.page-header { margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
 .page-title { font-size: 22px; color: #1e293b; font-weight: 700; margin: 0 0 4px 0; }
 .page-desc { font-size: 14px; color: #94a3b8; margin: 0; }
 .toolbar-card { border-radius: 8px; margin-bottom: 20px; }

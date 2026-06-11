@@ -10,7 +10,6 @@ export function getFiles(category) {
 
 export function uploadFile(formData) {
   return api.post('/files/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000,
   })
 }

@@ -13,10 +13,23 @@ import notificationRoutes from './routes/notifications.js'
 import studyMaterialRoutes from './routes/study_materials.js'
 import courseRoutes from './routes/courses.js'
 import classRoutes from './routes/classes.js'
+import groupRoutes from './routes/groups.js'
+import groupChatRoutes from './routes/group_chat.js'
+import groupFileRoutes from './routes/group_files.js'
+import settingsRoutes from './routes/settings.js'
+import rewardRoutes from './routes/rewards.js'
 
 const app = express()
 
 app.use(cors())
+// 对 multipart/form-data 请求跳过 json/urlencoded 解析，避免文件上传报错
+const skipMultipart = (req, res, next) => {
+  if (req.headers['content-type']?.includes('multipart/form-data')) {
+    return next()
+  }
+  next()
+}
+app.use(skipMultipart)
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
@@ -33,6 +46,11 @@ app.use('/api/notifications', notificationRoutes)
 app.use('/api/study-materials', studyMaterialRoutes)
 app.use('/api/courses', courseRoutes)
 app.use('/api/classes', classRoutes)
+app.use('/api/groups', groupRoutes)
+app.use('/api/group-chat', groupChatRoutes)
+app.use('/api/group-files', groupFileRoutes)
+app.use('/api/settings', settingsRoutes)
+app.use('/api/rewards', rewardRoutes)
 
 // 健康检查
 app.get('/api/health', async (req, res) => {
@@ -45,7 +63,7 @@ app.get('/api/health', async (req, res) => {
 })
 
 // 仅在直接运行时启动 HTTP 服务器
-const PORT = 8081
+const PORT = process.env.PORT || 8081
 if (process.env.NETLIFY_DEV !== 'true' && !process.env.LAMBDA_TASK_ROOT) {
   import('http').then(({ createServer }) => {
     const httpServer = createServer(app)

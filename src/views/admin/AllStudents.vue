@@ -24,6 +24,7 @@
         </el-select>
         <el-button type="primary" @click="handleSearch"><el-icon><Search /></el-icon>搜索</el-button>
         <el-button @click="handleReset"><el-icon><RefreshRight /></el-icon>重置</el-button>
+        <el-button type="success" @click="importDialogVisible = true"><el-icon><Upload /></el-icon>批量导入</el-button>
         <span class="result-count">共 <strong>{{ filteredStudents.length }}</strong> 条</span>
       </div>
     </el-card>
@@ -122,14 +123,67 @@
         <el-button type="primary" :loading="pwdLoading" @click="confirmResetPwd">确认重置</el-button>
       </template>
     </el-dialog>
+
+    <!-- Import Dialog -->
+    <el-dialog v-model="importDialogVisible" title="批量导入学生" width="600px" destroy-on-close>
+      <div style="margin-bottom: 16px;">
+        <p style="font-size: 14px; color: #475569; margin: 0 0 12px;">
+          请上传 Excel 文件，支持 .xlsx 格式。必填列：<strong>学号、姓名</strong>，可选列：性别、年龄、专业、班级、状态、密码。
+        </p>
+        <el-button type="primary" plain @click="downloadTemplate">
+          <el-icon><Download /></el-icon>下载模板
+        </el-button>
+      </div>
+
+      <el-upload
+        ref="uploadRef"
+        drag
+        action="#"
+        :auto-upload="false"
+        :on-change="handleFileChange"
+        :on-remove="handleFileRemove"
+        accept=".xlsx,.xls"
+        :limit="1"
+      >
+        <el-icon class="el-icon--upload"><Upload /></el-icon>
+        <div class="el-upload__text">
+          拖拽文件到此处或 <em>点击上传</em>
+        </div>
+        <template #tip>
+          <div class="el-upload__tip">
+            仅支持 .xlsx / .xls 格式，学号重复会自动更新已有记录
+          </div>
+        </template>
+      </el-upload>
+
+      <div v-if="importResult" style="margin-top: 16px;">
+        <el-alert
+          :title="importResult.message"
+          :type="importResult.failed.length > 0 ? 'warning' : 'success'"
+          :closable="false"
+          show-icon
+        />
+        <div v-if="importResult.failed.length > 0" style="margin-top: 12px; max-height: 200px; overflow-y: auto;">
+          <el-table :data="importResult.failed" size="small" border>
+            <el-table-column prop="row" label="行号" width="80" />
+            <el-table-column prop="reason" label="失败原因" />
+          </el-table>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="importDialogVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="importLoading" :disabled="!importFile" @click="confirmImport">开始导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, RefreshRight, Edit, Delete, Key } from '@element-plus/icons-vue'
-import { getStudents, updateStudent, deleteStudent, resetStudentPassword, batchResetPassword, getMajorsList } from '../../api/student'
+import { Search, RefreshRight, Edit, Delete, Key, Upload, Download } from '@element-plus/icons-vue'
+import { getStudents, updateStudent, deleteStudent, resetStudentPassword, batchResetPassword, getMajorsList, importStudents } from '../../api/student'
 import { getClasses } from '../../api/class'
 
 const loading = ref(false)
@@ -168,6 +222,13 @@ const filteredClassOptions = computed(() => {
 const pwdDialogVisible = ref(false)
 const pwdLoading = ref(false)
 const pwdForm = ref({ id: null, studentId: '', name: '', newPassword: '' })
+
+// 批量导入
+const importDialogVisible = ref(false)
+const importLoading = ref(false)
+const importFile = ref(null)
+const importResult = ref(null)
+const uploadRef = ref(null)
 
 const getStatusType = (s) => ({ '在读': 'success', '休学': 'warning', '毕业': 'info', '退学': 'danger' })[s] || 'success'
 
@@ -296,6 +357,49 @@ const confirmResetPwd = async () => {
     })
     pwdDialogVisible.value = false
   } catch { ElMessage.error('重置失败') } finally { pwdLoading.value = false }
+}
+
+// 批量导入相关方法
+const handleFileChange = (file) => {
+  importFile.value = file.raw
+  importResult.value = null
+}
+
+const handleFileRemove = () => {
+  importFile.value = null
+  importResult.value = null
+}
+
+const downloadTemplate = () => {
+  const template = [
+    ['学号', '姓名', '性别', '年龄', '专业', '班级', '状态', '密码'],
+    ['2024001', '张三', '男', '20', '计算机科学与技术', '计科2401', '在读', '123456'],
+    ['2024002', '李四', '女', '19', '软件工程', '软工2401', '在读', '123456']
+  ]
+  import('xlsx').then(xlsx => {
+    const ws = xlsx.utils.aoa_to_sheet(template)
+    const wb = xlsx.utils.book_new()
+    xlsx.utils.book_append_sheet(wb, ws, '学生模板')
+    xlsx.writeFile(wb, '学生导入模板.xlsx')
+  })
+}
+
+const confirmImport = async () => {
+  if (!importFile.value) { ElMessage.warning('请选择文件'); return }
+  importLoading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', importFile.value)
+    const res = await importStudents(formData)
+    importResult.value = res.data
+    ElMessage.success(res.data.message)
+    if (res.data.success.length > 0) fetchData()
+  } catch (e) {
+    console.error('导入失败:', e)
+    ElMessage.error(e.response?.data?.message || '导入失败')
+  } finally {
+    importLoading.value = false
+  }
 }
 
 onMounted(fetchData)

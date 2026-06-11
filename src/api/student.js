@@ -45,3 +45,10 @@ export function resetStudentPassword(id, newPassword) {
 export function batchResetPassword(ids) {
   return api.post('/students/batch-reset-password', { ids })
 }
+
+// 批量导入学生
+export function importStudents(formData) {
+  return api.post('/students/import', formData, {
+    timeout: 120000,
+  })
+}
