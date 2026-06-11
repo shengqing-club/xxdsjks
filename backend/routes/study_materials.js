@@ -147,12 +147,24 @@ router.get('/download/:id', async (req, res) => {
       ? material.file_data
       : Buffer.from(material.file_data)
 
-    res.setHeader('Content-Type', material.file_type || 'application/octet-stream')
-    // RFC 6266: ASCII 回退 + UTF-8 编码文件名
-    const encodedName = encodeURIComponent(material.file_name || 'download').replace(/['()]/g, escape)
-    res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
-    res.setHeader('Content-Length', fileBuffer.length)
-    res.end(fileBuffer)
+    // 判断是否为 serverless 环境（Netlify Functions）
+    const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+    if (isServerless) {
+      // serverless 环境返回 base64，前端解码
+      res.json({
+        base64: fileBuffer.toString('base64'),
+        fileName: material.file_name || 'download',
+        fileType: material.file_type || 'application/octet-stream',
+        fileSize: fileBuffer.length
+      })
+    } else {
+      // 传统服务器直接返回二进制
+      res.setHeader('Content-Type', material.file_type || 'application/octet-stream')
+      const encodedName = encodeURIComponent(material.file_name || 'download').replace(/['()]/g, escape)
+      res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
+      res.setHeader('Content-Length', fileBuffer.length)
+      res.end(fileBuffer)
+    }
   } catch (e) {
     console.error(e)
     res.status(500).json({ message: '下载失败' })

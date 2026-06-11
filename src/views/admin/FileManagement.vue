@@ -259,15 +259,7 @@ const submitUpload = async () => {
 
 const handleDownload = async (row) => {
   try {
-    const res = await downloadFile(row.id)
-    const blob = res.data || res
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = row.original_name
-    a.click()
-    URL.revokeObjectURL(url)
-    ElMessage.success('开始下载')
+    await downloadFile(row.id, row.original_name)
   } catch (e) {
     ElMessage.error('下载失败')
   }

@@ -118,8 +118,19 @@ router.get('/:id/download', async (req, res) => {
 
     res.setHeader('Content-Type', contentType)
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.original_name)}`)
-    res.setHeader('Content-Length', fileBuffer.length)  // 用实际 Buffer 长度，非数据库存储的 file_size 字符串
-    res.end(fileBuffer)
+    res.setHeader('Content-Length', fileBuffer.length)
+
+    const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+    if (isServerless) {
+      res.json({
+        base64: fileBuffer.toString('base64'),
+        fileName: file.original_name || 'download',
+        fileType: contentType,
+        fileSize: fileBuffer.length
+      })
+    } else {
+      res.end(fileBuffer)
+    }
   } catch (e) {
     console.error('下载失败:', e)
     res.status(500).json({ message: '下载失败' })

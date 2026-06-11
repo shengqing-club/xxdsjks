@@ -299,17 +299,7 @@ const confirmUpload = async () => {
 
 const handleDownload = async (row) => {
   try {
-    const res = await downloadStudyMaterial(row.id)
-    const blob = new Blob([res.data])
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = row.original_name || row.file_name || row.title || 'download'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    ElMessage.success('下载开始')
+    await downloadStudyMaterial(row.id, row.original_name || row.file_name || row.title)
   } catch (err) {
     console.error('下载失败:', err)
     ElMessage.error('下载失败')

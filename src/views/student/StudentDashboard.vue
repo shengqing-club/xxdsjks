@@ -234,48 +234,10 @@ const handleDeleteMaterial = async (material) => {
 // ============ 下载复习资料 ============
 const handleDownload = async (material) => {
   try {
-    ElMessage.info('正在下载，请稍候...')
-    const res = await downloadStudyMaterial(material.id)
-    // 尝试从 Content-Disposition 响应头提取 UTF-8 编码的文件名
-    const blob = res.data
-    if (!blob || blob.size === 0) {
-      ElMessage.error('下载失败：文件内容为空')
-      return
-    }
-    let fileName = ''
-    const disposition = res.headers?.['content-disposition'] || ''
-    const utf8Match = disposition.match(/filename\*=(?:UTF-8|utf-8)''(.+?)(?:;|$)/)
-    if (utf8Match) {
-      try { fileName = decodeURIComponent(utf8Match[1].trim()) } catch {}
-    }
-    if (!fileName) {
-      const plainMatch = disposition.match(/filename="?([^";]+)"?/)
-      if (plainMatch) fileName = plainMatch[1].trim()
-    }
-    if (!fileName) fileName = material.file_name || material.title || 'download'
-
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    await downloadStudyMaterial(material.id, material.file_name || material.title)
     ElMessage.success('下载完成')
   } catch (e) {
-    // 如果响应是 blob 形式的错误信息，尝试解析
-    if (e.response?.data instanceof Blob) {
-      const text = await e.response.data.text()
-      try {
-        const json = JSON.parse(text)
-        ElMessage.error('下载失败：' + (json.message || '未知错误'))
-      } catch {
-        ElMessage.error('下载失败：' + text)
-      }
-    } else {
-      ElMessage.error('下载失败：' + (e.message || '网络错误'))
-    }
+    ElMessage.error('下载失败：' + (e.message || '网络错误'))
   }
 }
 

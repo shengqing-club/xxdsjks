@@ -129,16 +129,7 @@ const handleUpload = async (file) => {
 
 const handleDownload = async (row) => {
   try {
-    const res = await downloadGroupFile(row.id)
-    const blob = new Blob([res.data])
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = row.original_name
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    await downloadGroupFile(row.id, row.original_name)
   } catch (err) {
     ElMessage.error('下载失败')
   }

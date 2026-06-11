@@ -98,6 +98,7 @@ import {
   UserFilled, StarFilled, Document, Picture, FolderOpened, Promotion
 } from '@element-plus/icons-vue'
 import { getGroupMessages, sendGroupMessage, uploadGroupFile, downloadGroupChatFile } from '../api/group_chat'
+import api from '../api/index'
 import { useAuth } from '../stores/auth'
 
 const props = defineProps({
@@ -203,11 +204,17 @@ const uploadChatFile = async (file, type) => {
   }
 }
 
-// 加载图片：通过API下载后转为blob URL显示
+// 加载图片：通过API获取base64后转为blob URL显示
 const loadImage = async (msg) => {
   try {
-    const res = await downloadGroupChatFile(msg.id)
-    const blob = new Blob([res.data], { type: 'image/*' })
+    const res = await api.get(`/group-chat/download/${msg.id}`)
+    const base64 = res.data.base64
+    const binaryStr = atob(base64)
+    const bytes = new Uint8Array(binaryStr.length)
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i)
+    }
+    const blob = new Blob([bytes], { type: 'image/*' })
     const url = URL.createObjectURL(blob)
     imageUrls.value[msg.id] = url
   } catch (err) {
@@ -226,16 +233,7 @@ const previewImage = (msgId) => {
 
 const downloadFile = async (msg) => {
   try {
-    const res = await downloadGroupChatFile(msg.id)
-    const blob = new Blob([res.data])
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = msg.file_name || 'download'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 5000)
+    await downloadGroupChatFile(msg.id, msg.file_name)
   } catch (err) {
     console.error('下载失败:', err)
     ElMessage.error('下载失败')

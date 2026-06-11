@@ -192,7 +192,18 @@ router.get('/download/:message_id', async (req, res) => {
     const encodedName = encodeURIComponent(msg.file_name || 'download').replace(/['()]/g, escape)
     res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
     res.setHeader('Content-Length', fileBuffer.length)
-    res.end(fileBuffer)
+
+    const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+    if (isServerless) {
+      res.json({
+        base64: fileBuffer.toString('base64'),
+        fileName: msg.file_name || 'download',
+        fileType: 'application/octet-stream',
+        fileSize: fileBuffer.length
+      })
+    } else {
+      res.end(fileBuffer)
+    }
   } catch (e) {
     console.error(e)
     res.status(500).json({ message: '下载失败' })
