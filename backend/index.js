@@ -62,9 +62,10 @@ app.get('/api/health', async (req, res) => {
   }
 })
 
-// 仅在直接运行时启动 HTTP 服务器
+// 仅在直接运行（非 Netlify Functions）时启动 HTTP 服务器
 const PORT = process.env.PORT || 8081
-if (process.env.NETLIFY_DEV !== 'true' && !process.env.LAMBDA_TASK_ROOT) {
+const isNetlify = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT || !!process.env.NETLIFY_DEV
+if (!isNetlify) {
   import('http').then(({ createServer }) => {
     const httpServer = createServer(app)
     httpServer.listen(PORT, () => {

@@ -3,7 +3,6 @@ import pkg from 'pg'
 const { Pool, types } = pkg
 
 // 覆盖 TIMESTAMP 和 TIMESTAMPTZ 类型解析器
-// 返回原始字符串而不是 Date 对象，避免 JSON.stringify 的 UTC 转换
 types.setTypeParser(1114, (val) => val)   // TIMESTAMP (without time zone)
 types.setTypeParser(1184, (val) => val)   // TIMESTAMPTZ (with time zone)
 
@@ -11,11 +10,14 @@ const connectionString = process.env.DATABASE_URL
 if (!connectionString) {
   console.error('ERROR: DATABASE_URL 环境变量未设置！')
 }
+
+// serverless 环境下连接池要小，避免耗尽数据库连接
+const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
 const pool = new Pool({
   connectionString,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  max: isServerless ? 3 : 20,
+  idleTimeoutMillis: isServerless ? 10000 : 30000,
+  connectionTimeoutMillis: 10000,
 })
 
 // 每个新连接设置时区为北京时间

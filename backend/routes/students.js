@@ -8,7 +8,7 @@ import multer from 'multer'
 const router = Router()
 router.use(authMiddleware) // 所有路由都需要登录，管理路由单独加 adminMiddleware
 
-const upload = multer({ dest: 'uploads/' })
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
 
 // ====== 学生端接口（只需登录） ======
 
@@ -220,13 +220,10 @@ router.post('/import', adminMiddleware, upload.single('file'), async (req, res) 
   try {
     if (!req.file) return res.status(400).json({ message: '请上传文件' })
 
-    const workbook = xlsx.readFile(req.file.path)
+    const workbook = xlsx.read(req.file.buffer)
     const sheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[sheetName]
     const rows = xlsx.utils.sheet_to_json(worksheet, { header: 1 })
-
-    // 删除临时文件
-    import('fs').then(fs => fs.promises.unlink(req.file.path).catch(() => {}))
 
     if (rows.length < 2) return res.status(400).json({ message: 'Excel文件为空或格式错误' })
 
