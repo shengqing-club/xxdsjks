@@ -7,7 +7,11 @@ const router = Router()
 router.use(authMiddleware)
 
 // 使用 memoryStorage（兼容 Netlify serverless 环境）
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
+// 支持所有文件类型，最大50MB
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }
+})
 
 // 确保 file_data 列存在
 const ensureFileDataColumn = async () => {
@@ -78,10 +82,44 @@ router.get('/:id/download', async (req, res) => {
       return res.status(404).json({ message: '文件内容已丢失（该文件可能是在旧版系统上传的）' })
     }
 
-    res.setHeader('Content-Type', file.file_type || 'application/octet-stream')
+    // 确保 file_data 是 Buffer（pg BYTEA 类型已是 Buffer）
+    const fileBuffer = Buffer.isBuffer(file.file_data)
+      ? file.file_data
+      : Buffer.from(file.file_data)
+
+    // 根据 file_type 或文件名推断 Content-Type
+    let contentType = file.file_type || 'application/octet-stream'
+    // 对无法识别的类型统一用 octet-stream，避免浏览器误判
+    if (!contentType || contentType === 'application/x-compressed') {
+      const ext = (file.original_name || '').split('.').pop().toLowerCase()
+      const mimeMap = {
+        'rar': 'application/x-rar-compressed',
+        'zip': 'application/zip',
+        '7z': 'application/x-7z-compressed',
+        'tar': 'application/x-tar',
+        'gz': 'application/gzip',
+        'pdf': 'application/pdf',
+        'doc': 'application/msword',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls': 'application/vnd.ms-excel',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'ppt': 'application/vnd.ms-powerpoint',
+        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'mp4': 'video/mp4',
+        'mp3': 'audio/mpeg',
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'txt': 'text/plain; charset=utf-8',
+      }
+      contentType = mimeMap[ext] || 'application/octet-stream'
+    }
+
+    res.setHeader('Content-Type', contentType)
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.original_name)}`)
-    res.setHeader('Content-Length', file.file_size)
-    res.send(file.file_data)
+    res.setHeader('Content-Length', fileBuffer.length)  // 用实际 Buffer 长度，非数据库存储的 file_size 字符串
+    res.end(fileBuffer)
   } catch (e) {
     console.error('下载失败:', e)
     res.status(500).json({ message: '下载失败' })
