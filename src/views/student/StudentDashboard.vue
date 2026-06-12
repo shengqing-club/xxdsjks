@@ -6,7 +6,7 @@ import { getStudentByStudentId } from '../../api/student'
 import { getGradesByStudent } from '../../api/grade'
 import { getAnnouncements } from '../../api/announcement'
 import { getNotifications, getUnreadCount } from '../../api/notification'
-import { getStudyMaterials, uploadStudyMaterial, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
+import { getStudyMaterials, uploadStudyMaterial, uploadStudyMaterialChunked, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
 import { getUpcomingExams } from '../../api/exam'
 import { normalizeDate, formatTimeRange, getExamStatus } from '../../utils/exam'
 import { getScrollingText, getFullscreenText } from '../../api/settings'
@@ -264,7 +264,7 @@ const handleOpenUpload = () => {
 }
 
 const handleFileChange = (file) => {
-  uploadFile.value = file
+  uploadFile.value = file.raw || file
   // 如果标题为空，自动填入文件名（不含扩展名）
   if (!uploadForm.value.title) {
     const name = file.name || ''
@@ -287,12 +287,23 @@ const submitUpload = async () => {
   }
   uploadLoading.value = true
   try {
-    const formData = new FormData()
-    formData.append('file', uploadFile.value.raw)
-    formData.append('title', uploadForm.value.title)
-    formData.append('course_name', uploadForm.value.course_name || '')
-    formData.append('class_name', student.value?.class_name || '')
-    await uploadStudyMaterial(formData)
+    const uploadOptions = {
+      title: uploadForm.value.title,
+      course_name: uploadForm.value.course_name || '',
+      class_name: student.value?.class_name || ''
+    }
+    const fileObj = uploadFile.value
+
+    if (fileObj.size > 5 * 1024 * 1024) {
+      await uploadStudyMaterialChunked(fileObj, uploadOptions)
+    } else {
+      const formData = new FormData()
+      formData.append('file', fileObj)
+      formData.append('title', uploadForm.value.title)
+      formData.append('course_name', uploadForm.value.course_name || '')
+      formData.append('class_name', student.value?.class_name || '')
+      await uploadStudyMaterial(formData)
+    }
     ElMessage.success('上传成功')
     uploadDialogVisible.value = false
     fetchStudyMaterials()

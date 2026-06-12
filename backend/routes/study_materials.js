@@ -9,6 +9,140 @@ router.use(authMiddleware)
 // 使用 memoryStorage（兼容 Netlify serverless 环境）
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
 
+// ========== 分片上传（绕过 Netlify 6MB payload 限制） ==========
+
+// 初始化分片上传
+router.post('/upload/chunked/init', async (req, res) => {
+  try {
+    const { fileName, fileSize, fileType, totalChunks, title, course_name, class_name } = req.body
+    if (!fileName || !totalChunks) return res.status(400).json({ message: '参数不完整' })
+
+    const uploaderId = req.user.studentId || req.user.username
+    const uploaderName = req.user.name || uploaderId
+    const uploaderRole = req.user.studentId ? 'student' : 'admin'
+
+    const uploadId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+
+    // 存储上传会话信息到临时表
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS upload_sessions (
+        upload_id TEXT PRIMARY KEY,
+        file_name TEXT,
+        file_size BIGINT,
+        file_type TEXT,
+        total_chunks INT,
+        received_chunks INT DEFAULT 0,
+        title TEXT,
+        course_name TEXT,
+        class_name TEXT,
+        uploader_id TEXT,
+        uploader_name TEXT,
+        uploader_role TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
+    await pool.query(
+      `INSERT INTO upload_sessions (upload_id, file_name, file_size, file_type, total_chunks, title, course_name, class_name, uploader_id, uploader_name, uploader_role)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [uploadId, fileName, fileSize, fileType, parseInt(totalChunks), title || fileName, course_name || null, class_name || null, uploaderId, uploaderName, uploaderRole]
+    )
+
+    res.json({ uploadId, chunkSize: 4 * 1024 * 1024 }) // 每片 4MB
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ message: '初始化失败' })
+  }
+})
+
+// 上传单个分片
+router.post('/upload/chunked/:uploadId/:chunkIndex', upload.single('chunk'), async (req, res) => {
+  try {
+    const { uploadId, chunkIndex } = req.params
+    if (!req.file) return res.status(400).json({ message: '无文件数据' })
+
+    // 存储分片到临时表
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS upload_chunks (
+        upload_id TEXT,
+        chunk_index INT,
+        chunk_data BYTEA,
+        PRIMARY KEY (upload_id, chunk_index)
+      )
+    `)
+
+    await pool.query(
+      'INSERT INTO upload_chunks (upload_id, chunk_index, chunk_data) VALUES ($1, $2, $3) ON CONFLICT (upload_id, chunk_index) DO UPDATE SET chunk_data = $3',
+      [uploadId, parseInt(chunkIndex), req.file.buffer]
+    )
+
+    // 更新已接收分片数
+    await pool.query(
+      'UPDATE upload_sessions SET received_chunks = received_chunks + 1 WHERE upload_id = $1',
+      [uploadId]
+    )
+
+    res.json({ chunkIndex: parseInt(chunkIndex) })
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ message: '分片上传失败' })
+  }
+})
+
+// 完成分片上传（合并所有分片）
+router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
+  try {
+    const { uploadId } = req.params
+
+    const session = await pool.query('SELECT * FROM upload_sessions WHERE upload_id = $1', [uploadId])
+    if (session.rows.length === 0) return res.status(404).json({ message: '上传会话不存在' })
+    const s = session.rows[0]
+
+    if (s.received_chunks < s.total_chunks) {
+      return res.status(400).json({ message: `分片不完整：${s.received_chunks}/${s.total_chunks}` })
+    }
+
+    // 读取所有分片并合并
+    const chunks = await pool.query(
+      'SELECT chunk_index, chunk_data FROM upload_chunks WHERE upload_id = $1 ORDER BY chunk_index',
+      [uploadId]
+    )
+
+    const totalBuffer = Buffer.concat(chunks.rows.map(c => c.chunk_data))
+
+    // 插入到 study_materials
+    const result = await pool.query(
+      `INSERT INTO study_materials
+        (title, file_url, file_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, file_data)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       RETURNING *`,
+      [s.title, `stored-in-db://${s.file_name}`, s.file_name, s.file_size, s.file_type, s.course_name, s.class_name, s.uploader_id, s.uploader_name, s.uploader_role, totalBuffer]
+    )
+
+    // 发通知
+    if (s.class_name) {
+      try {
+        const students = await pool.query('SELECT student_id FROM students WHERE class_name = $1', [s.class_name])
+        for (const st of students.rows) {
+          await pool.query(
+            `INSERT INTO notifications (receiver_id, title, content, type) VALUES ($1, $2, $3, 'material')`,
+            [st.student_id, `新复习资料: ${s.title}`, `课程「${s.course_name || '通用'}」上传了新的复习资料，请及时下载复习。`, 'material']
+          )
+        }
+      } catch (e) { console.error('通知发送失败:', e.message) }
+    }
+
+    // 清理临时数据
+    await pool.query('DELETE FROM upload_chunks WHERE upload_id = $1', [uploadId])
+    await pool.query('DELETE FROM upload_sessions WHERE upload_id = $1', [uploadId])
+
+    res.status(201).json(result.rows[0])
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ message: '合并失败: ' + e.message })
+  }
+})
+
 // 确保 study_materials 表有 file_data 列
 const ensureFileDataColumn = async () => {
   try {

@@ -114,7 +114,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="课程" required>
-          <el-select v-model="uploadForm.course_name" placeholder="选择课程" style="width: 100%">
+          <el-select v-model="uploadForm.course_name" filterable allow-create default-first-option placeholder="选择或输入课程" style="width: 100%">
             <el-option v-for="course in courseList" :key="course" :label="course" :value="course" />
           </el-select>
         </el-form-item>
@@ -122,6 +122,7 @@
           <el-input v-model="uploadForm.description" type="textarea" :rows="3" placeholder="可选：填写资料描述" />
         </el-form-item>
       </el-form>
+      <el-progress v-if="uploading && uploadProgress > 0" :percentage="uploadProgress" :stroke-width="18" style="margin-top: 12px" :format="(p) => p + '%'" />
       <template #footer>
         <el-button @click="uploadDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmUpload" :loading="uploading">确认上传</el-button>
@@ -137,7 +138,7 @@ import {
   Reading, Upload, Download, Delete, Search, Edit,
   FolderOpened, Document, Picture, VideoPlay, Headset
 } from '@element-plus/icons-vue'
-import { getStudyMaterials, uploadStudyMaterial, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
+import { getStudyMaterials, uploadStudyMaterial, uploadStudyMaterialChunked, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
 import { getClasses } from '../../api/class'
 import { getCourses } from '../../api/course'
 
@@ -157,6 +158,7 @@ const uploadForm = ref({ class_name: '', course_name: '', description: '' })
 const uploadFile = ref(null)
 const uploadRef = ref(null)
 const uploading = ref(false)
+const uploadProgress = ref(0)
 const selectedRows = ref([])
 const editingMode = ref(false)
 
@@ -279,15 +281,30 @@ const confirmUpload = async () => {
 
   uploading.value = true
   try {
-    const formData = new FormData()
-    formData.append('file', uploadFile.value)
-    formData.append('title', uploadFile.value.name)
-    formData.append('class_name', uploadForm.value.class_name)
-    formData.append('course_name', uploadForm.value.course_name)
-    formData.append('description', uploadForm.value.description || '')
-    await uploadStudyMaterial(formData)
+    const uploadOptions = {
+      title: uploadFile.value.name,
+      course_name: uploadForm.value.course_name,
+      class_name: uploadForm.value.class_name
+    }
+
+    if (uploadFile.value.size > 5 * 1024 * 1024) {
+      // 大文件：分片上传（绕过 Netlify 6MB 限制）
+      await uploadStudyMaterialChunked(uploadFile.value, uploadOptions, (progress) => {
+        uploadProgress.value = progress
+      })
+    } else {
+      // 小文件：普通上传
+      const formData = new FormData()
+      formData.append('file', uploadFile.value)
+      formData.append('title', uploadFile.value.name)
+      formData.append('class_name', uploadForm.value.class_name)
+      formData.append('course_name', uploadForm.value.course_name)
+      formData.append('description', uploadForm.value.description || '')
+      await uploadStudyMaterial(formData)
+    }
     ElMessage.success('上传成功')
     uploadDialogVisible.value = false
+    uploadProgress.value = 0
     loadMaterials()
   } catch (err) {
     console.error('上传失败:', err)

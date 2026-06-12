@@ -52,6 +52,48 @@ export function uploadStudyMaterial(formData) {
   return api.post('/study-materials/upload', formData)
 }
 
+// 分片上传（绕过 Netlify 6MB 限制）
+const CHUNK_SIZE = 4 * 1024 * 1024 // 4MB per chunk
+
+export async function uploadStudyMaterialChunked(file, options = {}, onProgress) {
+  const { title, course_name, class_name } = options
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+
+  // 1. 初始化
+  const initRes = await api.post('/study-materials/upload/chunked/init', {
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type,
+    totalChunks,
+    title: title || file.name,
+    course_name: course_name || '',
+    class_name: class_name || ''
+  })
+  const { uploadId } = initRes.data
+
+  // 2. 逐片上传
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE
+    const end = Math.min(start + CHUNK_SIZE, file.size)
+    const chunk = file.slice(start, end)
+
+    const formData = new FormData()
+    formData.append('chunk', chunk)
+
+    await api.post(`/study-materials/upload/chunked/${uploadId}/${i}`, formData, {
+      timeout: 60000
+    })
+
+    if (onProgress) {
+      onProgress(Math.round(((i + 1) / totalChunks) * 100))
+    }
+  }
+
+  // 3. 完成合并
+  const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`)
+  return completeRes.data
+}
+
 // 删除复习资料
 export function deleteStudyMaterial(id) {
   return api.delete(`/study-materials/${id}`)

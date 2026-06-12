@@ -71,6 +71,11 @@
             <span>班级管理</span>
           </el-menu-item>
 
+          <el-menu-item index="/courses">
+            <el-icon><Notebook /></el-icon>
+            <span>课程管理</span>
+          </el-menu-item>
+
           <el-menu-item index="/announcements">
             <el-icon><Bell /></el-icon>
             <span>公告管理</span>
@@ -156,6 +161,7 @@ import {
   TrophyBase,
   Collection,
   OfficeBuilding,
+  Notebook,
   Reading,
   User,
   Setting,
