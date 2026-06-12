@@ -32,20 +32,6 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
     const uploaderId = req.user.studentId || req.user.username
     const uploaderName = req.user.name || uploaderId
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS photo_wall (
-        id SERIAL PRIMARY KEY,
-        file_data BYTEA NOT NULL,
-        file_type TEXT,
-        file_size BIGINT,
-        description TEXT,
-        is_public BOOLEAN DEFAULT true,
-        uploader_id TEXT,
-        uploader_name TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
-
     const result = await pool.query(
       `INSERT INTO photo_wall (file_data, file_type, file_size, description, is_public, uploader_id, uploader_name)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, description, is_public, uploader_id, uploader_name, created_at`,

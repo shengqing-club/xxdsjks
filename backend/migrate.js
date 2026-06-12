@@ -136,7 +136,7 @@ async function migrate() {
         filename VARCHAR(255) NOT NULL,
         original_name VARCHAR(255) NOT NULL,
         file_size BIGINT DEFAULT 0,
-        file_type VARCHAR(50),
+        file_type VARCHAR(100),
         uploader_id VARCHAR(30),
         uploader_name VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -392,7 +392,7 @@ async function migrate() {
         file_name VARCHAR(255) NOT NULL,
         original_name VARCHAR(255) NOT NULL,
         file_size BIGINT DEFAULT 0,
-        file_type VARCHAR(50),
+        file_type VARCHAR(100),
         uploader_id VARCHAR(30),
         uploader_name VARCHAR(50),
         file_data BYTEA,
@@ -400,6 +400,141 @@ async function migrate() {
       )
     `)
     console.log('✓ group_files 表')
+
+    // ====== 14. 复习资料表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS study_materials (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(200) NOT NULL,
+        file_url VARCHAR(500),
+        file_name VARCHAR(255),
+        file_size BIGINT DEFAULT 0,
+        file_type VARCHAR(100),
+        course_name VARCHAR(100),
+        class_name VARCHAR(100),
+        uploader_id VARCHAR(30),
+        uploader_name VARCHAR(50),
+        uploader_role VARCHAR(10) DEFAULT 'admin',
+        file_data BYTEA,
+        version_group TEXT,
+        version_number INT DEFAULT 1,
+        is_latest BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ study_materials 表')
+
+    // ====== 15. 班级表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS classes (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        major_id INT REFERENCES majors(id),
+        description TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ classes 表')
+
+    // ====== 16. 设置表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS site_settings (
+        id SERIAL PRIMARY KEY,
+        key VARCHAR(100) UNIQUE NOT NULL,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ site_settings 表')
+
+    // ====== 17. 奖惩记录表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS rewards_punishments (
+        id SERIAL PRIMARY KEY,
+        student_id VARCHAR(30) NOT NULL,
+        student_name VARCHAR(50),
+        class_name VARCHAR(100),
+        type VARCHAR(20) NOT NULL,
+        category VARCHAR(50),
+        reason TEXT,
+        points INT DEFAULT 0,
+        awarded_by VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ rewards_punishments 表')
+
+    // ====== 18. 照片墙表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS photo_wall (
+        id SERIAL PRIMARY KEY,
+        file_data BYTEA NOT NULL,
+        file_type TEXT,
+        file_size BIGINT,
+        description TEXT,
+        is_public BOOLEAN DEFAULT true,
+        uploader_id TEXT,
+        uploader_name TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ photo_wall 表')
+
+    // ====== 列宽修复（已有表可能列宽不足） ======
+    const alterCols = [
+      ['study_materials', 'file_type', 'VARCHAR(100)'],
+      ['files', 'file_type', 'VARCHAR(100)'],
+      ['group_files', 'file_type', 'VARCHAR(100)'],
+    ]
+    for (const [table, col, type] of alterCols) {
+      try {
+        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${col} TYPE ${type}`)
+      } catch (e) { /* 列已满足或不存在 */ }
+    }
+
+    // ====== 重建结构不匹配的表 ======
+    const rebuildTables = ['photo_wall', 'rewards_punishments', 'classes']
+    for (const t of rebuildTables) {
+      try { await client.query(`DROP TABLE IF EXISTS ${t} CASCADE`) } catch (e) {}
+    }
+    // 重新执行建表
+    await client.query(`
+      CREATE TABLE classes (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        major_id INT REFERENCES majors(id),
+        description TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    await client.query(`
+      CREATE TABLE rewards_punishments (
+        id SERIAL PRIMARY KEY,
+        student_id VARCHAR(30) NOT NULL,
+        student_name VARCHAR(50),
+        class_name VARCHAR(100),
+        type VARCHAR(20) NOT NULL,
+        category VARCHAR(50),
+        reason TEXT,
+        points INT DEFAULT 0,
+        awarded_by VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    await client.query(`
+      CREATE TABLE photo_wall (
+        id SERIAL PRIMARY KEY,
+        file_data BYTEA NOT NULL,
+        file_type TEXT,
+        file_size BIGINT,
+        description TEXT,
+        is_public BOOLEAN DEFAULT true,
+        uploader_id TEXT,
+        uploader_name TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ 列宽检查 & 表重建完成')
 
     // 统计
     const { rows: stuCount } = await client.query('SELECT COUNT(*) as c FROM students')
