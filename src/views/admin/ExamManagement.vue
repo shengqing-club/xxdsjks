@@ -6,6 +6,12 @@
         <p class="page-desc">配置各班级考试安排，学生端首页可查看即将到来的考试</p>
       </div>
       <div class="header-actions">
+        <el-button :type="editingMode ? 'warning' : 'default'" @click="editingMode = !editingMode">
+          <el-icon><Edit /></el-icon> {{ editingMode ? '取消编辑' : '编辑管理' }}
+        </el-button>
+        <el-button v-if="editingMode && selectedRows.length > 0" type="danger" @click="handleBatchDelete">
+          <el-icon><Delete /></el-icon> 批量删除 ({{ selectedRows.length }})
+        </el-button>
         <el-button type="primary" @click="handleAdd">
           <el-icon><Plus /></el-icon>新增考试
         </el-button>
@@ -34,7 +40,8 @@
 
     <!-- 考试列表 -->
     <el-card shadow="never" class="table-card">
-      <el-table :data="exams" stripe row-key="id" :default-sort="{ prop: 'exam_date', order: 'ascending' }">
+      <el-table :data="exams" stripe row-key="id" :default-sort="{ prop: 'exam_date', order: 'ascending' }" @selection-change="selectedRows = $event">
+        <el-table-column v-if="editingMode" type="selection" width="50" />
         <el-table-column prop="course_name" label="课程名称" min-width="160">
           <template #default="{ row }">
             <span class="course-name">{{ row.course_name }}</span>
@@ -142,10 +149,13 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, List, Search, Edit, Delete, InfoFilled } from '@element-plus/icons-vue'
 import { getExams, addExam, updateExam, deleteExam, getExamClasses } from '../../api/exam'
+import api from '../../api/index'
 import { formatTimeRange, getExamStatus, isPast } from '../../utils/exam'
 
 const loading = ref(false)
 const exams = ref([])
+const selectedRows = ref([])
+const editingMode = ref(false)
 const classList = ref([])
 const filterClass = ref('')
 const filterStatus = ref('')
@@ -254,6 +264,19 @@ const handleDelete = async (row) => {
 const handleBatchAdd = () => {
   batchText.value = ''
   batchVisible.value = true
+}
+
+const handleBatchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(`确定删除选中的 ${selectedRows.value.length} 条考试安排吗？此操作不可恢复。`, '确认批量删除', { type: 'warning' })
+    const ids = selectedRows.value.map(r => r.id)
+    await api.post('/exams/batch-delete', { ids })
+    ElMessage.success(`成功删除 ${ids.length} 条考试安排`)
+    selectedRows.value = []
+    fetchData()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('批量删除失败')
+  }
 }
 
 const submitBatch = async () => {

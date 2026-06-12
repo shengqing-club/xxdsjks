@@ -204,22 +204,32 @@ const uploadChatFile = async (file, type) => {
   }
 }
 
-// 加载图片：通过API获取base64后转为blob URL显示
+// 加载图片：先尝试 JSON（serverless base64），再 fallback blob
 const loadImage = async (msg) => {
   try {
     const res = await api.get(`/group-chat/download/${msg.id}`)
-    const base64 = res.data.base64
-    const binaryStr = atob(base64)
-    const bytes = new Uint8Array(binaryStr.length)
-    for (let i = 0; i < binaryStr.length; i++) {
-      bytes[i] = binaryStr.charCodeAt(i)
+    if (res.data && res.data.base64) {
+      const binaryStr = atob(res.data.base64)
+      const bytes = new Uint8Array(binaryStr.length)
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i)
+      }
+      const blob = new Blob([bytes], { type: res.data.fileType || msg.file_type || 'image/png' })
+      const url = URL.createObjectURL(blob)
+      imageUrls.value[msg.id] = url
+      return
     }
-    const blob = new Blob([bytes], { type: 'image/*' })
+  } catch (e) {
+    // 不是 JSON，继续 blob
+  }
+  // 传统环境：直接 blob
+  try {
+    const res = await api.get(`/group-chat/download/${msg.id}`, { responseType: 'blob' })
+    const blob = new Blob([res.data], { type: msg.file_type || 'image/png' })
     const url = URL.createObjectURL(blob)
     imageUrls.value[msg.id] = url
   } catch (err) {
     console.error('加载图片失败:', err)
-    ElMessage.error('加载图片失败')
   }
 }
 

@@ -132,7 +132,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled, Download, Document, Picture, VideoPlay, Headset } from '@element-plus/icons-vue'
 import { useAuth } from '../../stores/auth'
-import { getFiles, uploadFile, downloadFile, getStudentUploadSetting } from '../../api/file'
+import { getFiles, uploadFile, uploadFileChunked, downloadFile, getStudentUploadSetting } from '../../api/file'
 
 const { displayName, studentId } = useAuth()
 
@@ -184,20 +184,33 @@ const submitUpload = async () => {
   }
   uploading.value = true
   try {
-    const formData = new FormData()
-    formData.append('file', uploadFileList.value[0].raw)
-    formData.append('originalFilename', uploadFileList.value[0].name) // 前端正确UTF-8文件名
-    formData.append('uploaderRole', 'student')
-    formData.append('uploaderId', studentId.value || '')
-    formData.append('uploaderName', displayName.value || '学生')
-    formData.append('category', uploadForm.value.category)
-    formData.append('description', uploadForm.value.description)
-    await uploadFile(formData)
+    const rawFile = uploadFileList.value[0].raw
+    const uploadOptions = {
+      category: uploadForm.value.category,
+      uploaderRole: 'student',
+      uploaderId: studentId.value || '',
+      uploaderName: displayName.value || '学生'
+    }
+
+    if (rawFile.size > 5 * 1024 * 1024) {
+      await uploadFileChunked(rawFile, uploadOptions)
+    } else {
+      const formData = new FormData()
+      formData.append('file', rawFile)
+      formData.append('originalFilename', uploadFileList.value[0].name)
+      formData.append('uploaderRole', 'student')
+      formData.append('uploaderId', studentId.value || '')
+      formData.append('uploaderName', displayName.value || '学生')
+      formData.append('category', uploadForm.value.category)
+      formData.append('description', uploadForm.value.description)
+      await uploadFile(formData)
+    }
     ElMessage.success('上传成功')
     uploadDialogVisible.value = false
+    uploadFileList.value = []
     fetchData()
   } catch (e) {
-    const msg = e.response?.data?.error || '上传失败'
+    const msg = e.response?.data?.message || e.response?.data?.error || '上传失败'
     ElMessage.error(msg)
   } finally {
     uploading.value = false

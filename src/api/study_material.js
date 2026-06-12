@@ -103,3 +103,39 @@ export function deleteStudyMaterial(id) {
 export function downloadStudyMaterial(id, fileName) {
   return downloadFileFromApi(`/study-materials/download/${id}`, fileName)
 }
+
+// 获取版本历史
+export function getMaterialVersions(id) {
+  return api.get(`/study-materials/${id}/versions`)
+}
+
+// 上传新版本（复用分片上传，传入 version_group）
+export async function uploadStudyMaterialNewVersion(file, versionGroup, options = {}, onProgress) {
+  const { title, course_name, class_name } = options
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+
+  const initRes = await api.post('/study-materials/upload/chunked/init', {
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type,
+    totalChunks,
+    title: title || file.name,
+    course_name: course_name || '',
+    class_name: class_name || '',
+    version_group: versionGroup
+  })
+  const { uploadId } = initRes.data
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE
+    const end = Math.min(start + CHUNK_SIZE, file.size)
+    const chunk = file.slice(start, end)
+    const formData = new FormData()
+    formData.append('chunk', chunk)
+    await api.post(`/study-materials/upload/chunked/${uploadId}/${i}`, formData, { timeout: 60000 })
+    if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100))
+  }
+
+  const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`)
+  return completeRes.data
+}

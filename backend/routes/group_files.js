@@ -102,7 +102,7 @@ router.get('/download/:file_id', async (req, res) => {
     const fileBuffer = Buffer.isBuffer(file.file_data) ? file.file_data : Buffer.from(file.file_data)
 
     res.setHeader('Content-Type', file.file_type || 'application/octet-stream')
-    const encodedName = encodeURIComponent(file.original_name || 'download').replace(/['()]/g, escape)
+    const encodedName = encodeURIComponent(file.original_name || 'download').replace(/['()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
     res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
     res.setHeader('Content-Length', fileBuffer.length)
 

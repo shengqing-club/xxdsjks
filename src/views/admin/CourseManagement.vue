@@ -2,12 +2,21 @@
   <div class="course-management">
     <div class="page-header">
       <h2>课程管理</h2>
-      <el-button type="primary" @click="openDialog()">
-        <el-icon><Plus /></el-icon> 新增课程
-      </el-button>
+      <div class="header-actions">
+        <el-button :type="editingMode ? 'warning' : 'default'" @click="editingMode = !editingMode">
+          <el-icon><Edit /></el-icon> {{ editingMode ? '取消编辑' : '编辑管理' }}
+        </el-button>
+        <el-button v-if="editingMode && selectedRows.length > 0" type="danger" @click="handleBatchDelete">
+          <el-icon><Delete /></el-icon> 批量删除 ({{ selectedRows.length }})
+        </el-button>
+        <el-button type="primary" @click="openDialog()">
+          <el-icon><Plus /></el-icon> 新增课程
+        </el-button>
+      </div>
     </div>
 
-    <el-table :data="courseList" v-loading="loading" stripe border>
+    <el-table :data="courseList" v-loading="loading" stripe border @selection-change="selectedRows = $event">
+      <el-table-column v-if="editingMode" type="selection" width="50" />
       <el-table-column prop="id" label="ID" width="60" />
       <el-table-column prop="name" label="课程名称" min-width="150" />
       <el-table-column prop="code" label="课程代码" width="120" />
@@ -52,11 +61,13 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Delete, Edit } from '@element-plus/icons-vue'
 import api from '../../api/index'
 
 const loading = ref(false)
 const courseList = ref([])
+const selectedRows = ref([])
+const editingMode = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const submitting = ref(false)
@@ -120,6 +131,19 @@ const handleDelete = async (row) => {
   }
 }
 
+const handleBatchDelete = async () => {
+  try {
+    await ElMessageBox.confirm(`确定删除选中的 ${selectedRows.value.length} 门课程吗？此操作不可恢复。`, '确认批量删除', { type: 'warning' })
+    const ids = selectedRows.value.map(r => r.id)
+    await api.post('/courses/batch-delete', { ids })
+    ElMessage.success(`成功删除 ${ids.length} 门课程`)
+    selectedRows.value = []
+    loadCourses()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('批量删除失败')
+  }
+}
+
 onMounted(loadCourses)
 </script>
 
@@ -135,5 +159,9 @@ onMounted(loadCourses)
 }
 .page-header h2 {
   margin: 0;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>

@@ -9,7 +9,7 @@ import { getNotifications, getUnreadCount } from '../../api/notification'
 import { getStudyMaterials, uploadStudyMaterial, uploadStudyMaterialChunked, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
 import { getUpcomingExams } from '../../api/exam'
 import { normalizeDate, formatTimeRange, getExamStatus } from '../../utils/exam'
-import { getScrollingText, getFullscreenText } from '../../api/settings'
+import { getScrollingText } from '../../api/settings'
 import { getRewards } from '../../api/reward'
 import EasterEgg from '../../components/EasterEgg.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -27,9 +27,6 @@ const unreadCount = ref(0)
 const scrollingEnabled = ref(false)
 const scrollingContent = ref('')
 const scrollingMode = ref('normal')
-const fullscreenEnabled = ref(false)
-const fullscreenContent = ref('')
-const fullscreenFont = ref('serif')
 const rewardRecords = ref([])
 const easterEggRef = ref(null)
 
@@ -197,17 +194,6 @@ const fetchScrollingText = async () => {
     scrollingMode.value = res.data.mode || 'normal'
   } catch (e) {
     console.warn('[Dashboard] 字幕设置获取失败:', e.message)
-  }
-}
-
-const fetchFullscreenText = async () => {
-  try {
-    const res = await getFullscreenText()
-    fullscreenEnabled.value = res.data.enabled
-    fullscreenContent.value = res.data.content
-    fullscreenFont.value = res.data.font || 'serif'
-  } catch (e) {
-    console.warn('[Dashboard] 全屏文字设置获取失败:', e.message)
   }
 }
 
@@ -381,27 +367,16 @@ onMounted(async () => {
 
 // 每10秒轮询设置，管理端开启后学生端实时显示
 let scrollPolling = null
-let fullscreenPolling = null
 onMounted(() => {
   scrollPolling = setInterval(fetchScrollingText, 10000)
-  fullscreenPolling = setInterval(fetchFullscreenText, 10000)
 })
 onUnmounted(() => {
   if (scrollPolling) clearInterval(scrollPolling)
-  if (fullscreenPolling) clearInterval(fullscreenPolling)
 })
 </script>
 
 <template>
   <div v-loading="loading" class="dashboard">
-    <!-- 全屏文字覆盖 -->
-    <div v-if="fullscreenEnabled && fullscreenContent" class="fullscreen-overlay">
-      <div class="fullscreen-inner">
-        <div class="fullscreen-line"></div>
-        <div class="fullscreen-text-content" :class="fullscreenFont === 'kai' ? 'font-kai' : 'font-song'">{{ fullscreenContent }}</div>
-        <div class="fullscreen-line"></div>
-      </div>
-    </div>
 
     <!-- 考试中横幅 -->
     <el-alert
@@ -822,47 +797,6 @@ onUnmounted(() => {
 @keyframes scroll-left {
   0% { transform: translateX(0); }
   100% { transform: translateX(-100%); }
-}
-
-/* 全屏文字覆盖层 */
-.fullscreen-overlay {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
-  z-index: 9999;
-  background: linear-gradient(135deg, #1a56db 0%, #1e40af 50%, #312e81 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.fullscreen-inner {
-  text-align: center;
-  padding: 80px 120px;
-  max-width: 1100px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 48px;
-}
-.fullscreen-line {
-  width: 160px;
-  height: 2px;
-  background: rgba(255,255,255,0.35);
-}
-.fullscreen-text-content {
-  font-size: clamp(36px, 5.5vw, 64px);
-  color: #fff;
-  font-weight: 600;
-  line-height: 2.2;
-  white-space: pre-wrap;
-  letter-spacing: 12px;
-  text-shadow: 0 2px 12px rgba(0,0,0,0.15);
-}
-.font-song {
-  font-family: 'SimSun', 'STSong', '宋体', 'Noto Serif CJK SC', serif;
-}
-.font-kai {
-  font-family: 'KaiTi', 'STKaiti', '楷体', 'Noto Serif CJK SC', serif;
 }
 
 .notif-detail-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }

@@ -1,24 +1,62 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuth } from '../../stores/auth'
-import { DataBoard, Calendar, User, Document, Trophy, OfficeBuilding, FolderOpened, Lock, SwitchButton, ChatDotRound, Reading } from '@element-plus/icons-vue'
+import { DataBoard, Calendar, User, Document, Trophy, OfficeBuilding, FolderOpened, Lock, SwitchButton, ChatDotRound, Reading, Picture, Moon, Sunny } from '@element-plus/icons-vue'
 import AnnouncementBar from '../../components/AnnouncementBar.vue'
 import ChatRoom from '../../views/ChatRoom.vue'
 import NotificationCenter from '../../components/NotificationCenter.vue'
+import { getFullscreenText } from '../../api/settings'
 
 const route = useRoute()
 const router = useRouter()
 const { displayName, doLogout } = useAuth()
 
 const activeMenu = computed(() => route.path)
+const isDark = ref(false)
+
+onMounted(() => {
+  isDark.value = document.documentElement.classList.contains('dark')
+})
+
+const toggleDarkMode = () => {
+  isDark.value = !isDark.value
+  document.documentElement.classList.toggle('dark')
+  localStorage.setItem('darkMode', isDark.value)
+}
 
 const handleLogout = async () => {
   await doLogout()
   ElMessage.success('已退出登录')
   router.push('/login')
 }
+
+// ========== 全屏文字（所有学生端页面生效） ==========
+const fullscreenEnabled = ref(false)
+const fullscreenContent = ref('')
+const fullscreenFont = ref('serif')
+let fullscreenPolling = null
+
+const fetchFullscreenText = async () => {
+  try {
+    const res = await getFullscreenText()
+    fullscreenEnabled.value = res.data.enabled
+    fullscreenContent.value = res.data.content
+    fullscreenFont.value = res.data.font || 'serif'
+  } catch (e) {
+    // 静默失败
+  }
+}
+
+onMounted(() => {
+  fetchFullscreenText()
+  fullscreenPolling = setInterval(fetchFullscreenText, 10000)
+})
+
+onUnmounted(() => {
+  if (fullscreenPolling) clearInterval(fullscreenPolling)
+})
 </script>
 
 <template>
@@ -30,6 +68,9 @@ const handleLogout = async () => {
         <span class="header-title">学生个人考试终端</span>
       </div>
       <div class="header-right">
+        <el-button circle size="small" @click="toggleDarkMode" :title="isDark ? '切换亮色' : '切换暗色'">
+          <el-icon><component :is="isDark ? Sunny : Moon" /></el-icon>
+        </el-button>
         <NotificationCenter />
         <el-icon class="avatar-icon" :size="18"><User /></el-icon>
         <span class="display-name">{{ displayName }}</span>
@@ -91,6 +132,10 @@ const handleLogout = async () => {
             <el-icon><ChatDotRound /></el-icon>
             <span>我的分组</span>
           </el-menu-item>
+          <el-menu-item index="/student/photo-wall">
+            <el-icon><Picture /></el-icon>
+            <span>照片墙</span>
+          </el-menu-item>
           <el-menu-item index="/student/password">
             <el-icon><Lock /></el-icon>
             <span>修改密码</span>
@@ -106,6 +151,15 @@ const handleLogout = async () => {
 
     <!-- Chat Room -->
     <ChatRoom />
+
+    <!-- 全屏文字覆盖（所有学生端页面生效） -->
+    <div v-if="fullscreenEnabled && fullscreenContent" class="fullscreen-overlay">
+      <div class="fullscreen-inner">
+        <div class="fullscreen-line"></div>
+        <div class="fullscreen-text-content" :class="fullscreenFont === 'kai' ? 'font-kai' : 'font-song'">{{ fullscreenContent }}</div>
+        <div class="fullscreen-line"></div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -221,5 +275,46 @@ const handleLogout = async () => {
   .sidebar { width: 56px; }
   .sidebar-menu .el-menu-item span { display: none; }
   .content { padding: 12px; }
+}
+
+/* 全屏文字覆盖层 */
+.fullscreen-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  z-index: 9999;
+  background: linear-gradient(135deg, #1a56db 0%, #1e40af 50%, #312e81 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fullscreen-inner {
+  text-align: center;
+  padding: 80px 120px;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 48px;
+}
+.fullscreen-line {
+  width: 160px;
+  height: 2px;
+  background: rgba(255,255,255,0.35);
+}
+.fullscreen-text-content {
+  font-size: clamp(36px, 5.5vw, 64px);
+  color: #fff;
+  font-weight: 600;
+  line-height: 2.2;
+  white-space: pre-wrap;
+  letter-spacing: 12px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.15);
+}
+.font-song {
+  font-family: 'SimSun', 'STSong', '宋体', 'Noto Serif CJK SC', serif;
+}
+.font-kai {
+  font-family: 'KaiTi', 'STKaiti', '楷体', 'Noto Serif CJK SC', serif;
 }
 </style>

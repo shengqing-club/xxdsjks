@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import rateLimit from 'express-rate-limit'
 import pool from './db.js'
 import authRoutes from './routes/auth.js'
 import studentRoutes from './routes/students.js'
@@ -18,10 +19,32 @@ import groupChatRoutes from './routes/group_chat.js'
 import groupFileRoutes from './routes/group_files.js'
 import settingsRoutes from './routes/settings.js'
 import rewardRoutes from './routes/rewards.js'
+import photoWallRoutes from './routes/photo_wall.js'
 
 const app = express()
 
 app.use(cors())
+
+// API 限流：每 IP 每分钟最多 100 次请求，上传接口单独限制
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: '请求过于频繁，请稍后再试' }
+})
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: '上传过于频繁，请稍后再试' }
+})
+app.use('/api/', generalLimiter)
+app.use('/api/files/upload', uploadLimiter)
+app.use('/api/study-materials/upload', uploadLimiter)
+app.use('/api/group-chat', uploadLimiter)
+app.use('/api/group-files', uploadLimiter)
 // 对 multipart/form-data 请求跳过 json/urlencoded 解析，避免文件上传报错
 const skipMultipart = (req, res, next) => {
   if (req.headers['content-type']?.includes('multipart/form-data')) {
@@ -51,6 +74,7 @@ app.use('/api/group-chat', groupChatRoutes)
 app.use('/api/group-files', groupFileRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/rewards', rewardRoutes)
+app.use('/api/photo-wall', photoWallRoutes)
 
 // 健康检查
 app.get('/api/health', async (req, res) => {
@@ -62,6 +86,22 @@ app.get('/api/health', async (req, res) => {
   }
 })
 
+// 定时清理过期的分片上传临时数据（超过 24 小时的）
+async function cleanupStaleUploads() {
+  try {
+    const result = await pool.query(
+      "DELETE FROM upload_sessions WHERE created_at < NOW() - INTERVAL '24 hours' RETURNING upload_id"
+    )
+    if (result.rows.length > 0) {
+      const ids = result.rows.map(r => r.upload_id)
+      await pool.query('DELETE FROM upload_chunks WHERE upload_id = ANY($1)', [ids])
+      console.log(`[cleanup] 清理了 ${result.rows.length} 个过期上传会话`)
+    }
+  } catch (e) {
+    console.error('[cleanup] 清理失败:', e.message)
+  }
+}
+
 // 仅在直接运行（非 Netlify Functions）时启动 HTTP 服务器
 const PORT = process.env.PORT || 8081
 const isNetlify = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT || !!process.env.NETLIFY_DEV
@@ -71,6 +111,9 @@ if (!isNetlify) {
     httpServer.listen(PORT, () => {
       console.log(`后端服务器运行在 http://localhost:${PORT}`)
       console.log('API 基础路径: /api')
+      // 启动时立即清理一次，然后每小时清理
+      cleanupStaleUploads()
+      setInterval(cleanupStaleUploads, 60 * 60 * 1000)
     })
   })
 }

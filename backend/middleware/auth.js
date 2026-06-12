@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = 'student-mgmt-secret-key-2024'
+const JWT_SECRET = process.env.JWT_SECRET || 'student-mgmt-secret-key-2024'
 
 export function signToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' })
@@ -15,6 +15,12 @@ export function authMiddleware(req, res, next) {
     const token = authHeader.split(' ')[1]
     const decoded = jwt.verify(token, JWT_SECRET)
     req.user = decoded
+    // 如果 token 将在 1 小时内过期，在响应头中附带新 token
+    const now = Math.floor(Date.now() / 1000)
+    if (decoded.exp && decoded.exp - now < 3600) {
+      const newToken = signToken({ id: decoded.id, username: decoded.username, studentId: decoded.studentId, name: decoded.name, role: decoded.role })
+      res.setHeader('X-Refresh-Token', newToken)
+    }
     next()
   } catch {
     return res.status(401).json({ message: 'Token无效' })

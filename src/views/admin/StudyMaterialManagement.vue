@@ -63,11 +63,21 @@
           {{ formatDate(row.created_at) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="版本" width="100">
+        <template #default="{ row }">
+          <el-tag v-if="row.version_number > 1" size="small" type="warning">v{{ row.version_number }}</el-tag>
+          <el-tag v-else size="small" type="info">v1</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" size="small" @click="handleDownload(row)">
             <el-icon><Download /></el-icon>
             下载
+          </el-button>
+          <el-button type="success" size="small" @click="openVersionDialog(row)">
+            <el-icon><Document /></el-icon>
+            版本
           </el-button>
           <el-button v-if="editingMode" type="danger" size="small" @click="handleDelete(row)">
             <el-icon><Delete /></el-icon>
@@ -123,9 +133,62 @@
         </el-form-item>
       </el-form>
       <el-progress v-if="uploading && uploadProgress > 0" :percentage="uploadProgress" :stroke-width="18" style="margin-top: 12px" :format="(p) => p + '%'" />
+      <UploadComfortText :visible="uploading && uploadProgress > 0" />
       <template #footer>
         <el-button @click="uploadDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmUpload" :loading="uploading">确认上传</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 版本历史弹窗 -->
+    <el-dialog v-model="versionDialogVisible" :title="`版本历史 - ${currentMaterial?.title}`" width="600px" destroy-on-close>
+      <div v-if="versionLoading" class="version-loading">加载中...</div>
+      <div v-else-if="versions.length === 0" class="version-empty">暂无版本历史</div>
+      <el-timeline v-else>
+        <el-timeline-item
+          v-for="v in versions"
+          :key="v.id"
+          :type="v.is_latest ? 'primary' : ''"
+          :timestamp="formatDate(v.created_at)"
+        >
+          <div class="version-item">
+            <div class="version-header">
+              <el-tag :type="v.is_latest ? 'success' : 'info'" size="small">v{{ v.version_number }}</el-tag>
+              <span v-if="v.is_latest" class="version-latest">当前版本</span>
+            </div>
+            <div class="version-info">{{ v.file_name }} · {{ formatFileSize(v.file_size) }}</div>
+            <div class="version-actions">
+              <el-button type="primary" link size="small" @click="downloadStudyMaterial(v.id, v.file_name)">下载</el-button>
+            </div>
+          </div>
+        </el-timeline-item>
+      </el-timeline>
+      <template #footer>
+        <el-button @click="versionDialogVisible = false">关闭</el-button>
+        <el-button type="primary" @click="openUploadNewVersion">上传新版本</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 上传新版本弹窗 -->
+    <el-dialog v-model="newVersionDialogVisible" title="上传新版本" width="500px" destroy-on-close>
+      <el-form label-width="100px">
+        <el-form-item label="选择文件" required>
+          <el-upload
+            ref="versionUploadRef"
+            action="#"
+            :auto-upload="false"
+            :on-change="handleVersionFileChange"
+            :limit="1"
+          >
+            <el-button type="primary"><el-icon><FolderOpened /></el-icon> 选择文件</el-button>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <el-progress v-if="versionUploading && versionUploadProgress > 0" :percentage="versionUploadProgress" :stroke-width="18" style="margin-top: 12px" :format="(p) => p + '%'" />
+      <UploadComfortText :visible="versionUploading && versionUploadProgress > 0" />
+      <template #footer>
+        <el-button @click="newVersionDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmNewVersion" :loading="versionUploading">确认上传</el-button>
       </template>
     </el-dialog>
   </div>
@@ -138,9 +201,10 @@ import {
   Reading, Upload, Download, Delete, Search, Edit,
   FolderOpened, Document, Picture, VideoPlay, Headset
 } from '@element-plus/icons-vue'
-import { getStudyMaterials, uploadStudyMaterial, uploadStudyMaterialChunked, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
+import { getStudyMaterials, uploadStudyMaterial, uploadStudyMaterialChunked, uploadStudyMaterialNewVersion, deleteStudyMaterial, downloadStudyMaterial, getMaterialVersions } from '../../api/study_material'
 import { getClasses } from '../../api/class'
 import { getCourses } from '../../api/course'
+import UploadComfortText from '../../components/UploadComfortText.vue'
 
 const loading = ref(false)
 const materialList = ref([])
@@ -161,6 +225,17 @@ const uploading = ref(false)
 const uploadProgress = ref(0)
 const selectedRows = ref([])
 const editingMode = ref(false)
+
+// 版本管理
+const versionDialogVisible = ref(false)
+const versionLoading = ref(false)
+const versions = ref([])
+const currentMaterial = ref(null)
+const newVersionDialogVisible = ref(false)
+const versionUploadFile = ref(null)
+const versionUploadRef = ref(null)
+const versionUploading = ref(false)
+const versionUploadProgress = ref(0)
 
 const toggleEditMode = () => {
   editingMode.value = !editingMode.value
@@ -338,6 +413,58 @@ const handleDelete = async (row) => {
       console.error('删除失败:', err)
       ElMessage.error('删除失败')
     }
+  }
+}
+
+// 版本管理方法
+const openVersionDialog = async (row) => {
+  currentMaterial.value = row
+  versionDialogVisible.value = true
+  versionLoading.value = true
+  try {
+    const res = await getMaterialVersions(row.id)
+    versions.value = res.data.versions || []
+  } catch (err) {
+    ElMessage.error('获取版本历史失败')
+  } finally {
+    versionLoading.value = false
+  }
+}
+
+const openUploadNewVersion = () => {
+  versionUploadFile.value = null
+  if (versionUploadRef.value) versionUploadRef.value.clearFiles()
+  newVersionDialogVisible.value = true
+}
+
+const handleVersionFileChange = (file) => {
+  versionUploadFile.value = file.raw
+}
+
+const confirmNewVersion = async () => {
+  if (!versionUploadFile.value) {
+    ElMessage.warning('请选择文件')
+    return
+  }
+  versionUploading.value = true
+  try {
+    await uploadStudyMaterialNewVersion(
+      versionUploadFile.value,
+      currentMaterial.value.version_group,
+      { title: currentMaterial.value.title, course_name: currentMaterial.value.course_name, class_name: currentMaterial.value.class_name },
+      (progress) => { versionUploadProgress.value = progress }
+    )
+    ElMessage.success('新版本上传成功')
+    newVersionDialogVisible.value = false
+    versionUploadProgress.value = 0
+    // 刷新版本列表
+    const res = await getMaterialVersions(currentMaterial.value.id)
+    versions.value = res.data.versions || []
+    loadMaterials()
+  } catch (err) {
+    ElMessage.error('上传失败: ' + (err.response?.data?.message || err.message))
+  } finally {
+    versionUploading.value = false
   }
 }
 

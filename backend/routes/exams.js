@@ -136,4 +136,17 @@ router.delete('/:id', adminMiddleware, async (req, res) => {
   }
 })
 
+// 管理端：批量删除考试
+router.post('/batch-delete', adminMiddleware, async (req, res) => {
+  try {
+    const { ids } = req.body
+    if (!ids || !ids.length) return res.status(400).json({ message: '请选择要删除的考试' })
+    const result = await pool.query('DELETE FROM exams WHERE id = ANY($1)', [ids])
+    res.json({ message: `成功删除 ${result.rowCount} 条考试安排` })
+  } catch (e) {
+    console.error('批量删除考试失败:', e)
+    res.status(500).json({ message: '批量删除失败' })
+  }
+})
+
 export default router

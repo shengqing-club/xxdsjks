@@ -7,6 +7,9 @@
         <h1 class="header-title">学生信息管理系统</h1>
       </div>
       <div class="header-right">
+        <el-button circle size="small" @click="toggleDarkMode" :title="isDark ? '切换亮色' : '切换暗色'">
+          <el-icon><component :is="isDark ? Sunny : Moon" /></el-icon>
+        </el-button>
         <NotificationCenter />
         <span class="user-name">
           <el-icon><UserFilled /></el-icon>
@@ -111,6 +114,11 @@
             <span>奖惩管理</span>
           </el-menu-item>
 
+          <el-menu-item index="/photo-wall">
+            <el-icon><Picture /></el-icon>
+            <span>照片墙管理</span>
+          </el-menu-item>
+
           <el-sub-menu index="data-visual">
             <template #title>
               <el-icon><DataAnalysis /></el-icon>
@@ -140,7 +148,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../../stores/auth'
 import AnnouncementBar from '../../components/AnnouncementBar.vue'
@@ -165,7 +173,10 @@ import {
   Reading,
   User,
   Setting,
-  Trophy
+  Trophy,
+  Picture,
+  Moon,
+  Sunny
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -173,6 +184,17 @@ const router = useRouter()
 const { displayName, doLogout } = useAuth()
 
 const activeMenu = computed(() => route.path)
+const isDark = ref(false)
+
+onMounted(() => {
+  isDark.value = document.documentElement.classList.contains('dark')
+})
+
+const toggleDarkMode = () => {
+  isDark.value = !isDark.value
+  document.documentElement.classList.toggle('dark')
+  localStorage.setItem('darkMode', isDark.value)
+}
 
 const handleLogout = async () => {
   await doLogout()

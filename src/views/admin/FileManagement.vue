@@ -45,6 +45,16 @@
           />
         </div>
 
+        <div class="toolbar-right" style="margin-left: 16px">
+          <span class="toggle-label">拦截危险文件：</span>
+          <el-switch
+            v-model="dangerousBlockEnabled"
+            active-text="已开启"
+            inactive-text="已关闭"
+            @change="toggleDangerousBlock"
+          />
+        </div>
+
         <span class="result-count">
           共 <strong>{{ files.length }}</strong> 个文件
         </span>
@@ -80,6 +90,8 @@
           <el-input v-model="uploadForm.description" type="textarea" :rows="2" placeholder="文件描述（选填）" />
         </el-form-item>
       </el-form>
+      <el-progress v-if="uploading && uploadProgress > 0" :percentage="uploadProgress" :stroke-width="18" style="margin-top: 12px" :format="(p) => p + '%'" />
+      <UploadComfortText :visible="uploading && uploadProgress > 0" />
       <template #footer>
         <el-button @click="uploadDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="uploading" @click="submitUpload">确定上传</el-button>
@@ -124,8 +136,12 @@
             {{ formatTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160">
+        <el-table-column label="操作" width="210">
           <template #default="{ row }">
+            <el-button v-if="row.file_type?.startsWith('image/')" type="success" size="small" @click="handlePreview(row)">
+              <el-icon><View /></el-icon>
+              预览
+            </el-button>
             <el-button type="primary" size="small" @click="handleDownload(row)">
               <el-icon><Download /></el-icon>
               下载
@@ -144,25 +160,34 @@
         </el-button>
       </div>
     </el-card>
+
+    <!-- 图片预览 -->
+    <el-dialog v-model="previewVisible" title="图片预览" width="70%" destroy-on-close @closed="previewImageUrl = ''">
+      <img :src="previewImageUrl" style="width: 100%; max-height: 70vh; object-fit: contain;" />
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { UploadFilled, Download, Delete, Edit, Document, Picture, VideoPlay, Headset, Files } from '@element-plus/icons-vue'
-import { getFiles, uploadFile, downloadFile, deleteFile, getStudentUploadSetting, setStudentUploadSetting } from '../../api/file'
+import { UploadFilled, Download, Delete, Edit, Document, Picture, VideoPlay, Headset, Files, View } from '@element-plus/icons-vue'
+import { getFiles, uploadFile, uploadFileChunked, downloadFile, deleteFile, getStudentUploadSetting, setStudentUploadSetting, getDangerousFileBlockSetting, setDangerousFileBlockSetting } from '../../api/file'
+import UploadComfortText from '../../components/UploadComfortText.vue'
+import api from '../../api/index'
 
 const loading = ref(false)
 const files = ref([])
 const filterCategory = ref('')
 const studentUploadEnabled = ref(false)
+const dangerousBlockEnabled = ref(true)
 const editingMode = ref(false)
 const selectedRows = ref([])
 
 // Upload dialog
 const uploadDialogVisible = ref(false)
 const uploading = ref(false)
+const uploadProgress = ref(0)
 const uploadRef = ref(null)
 const uploadFileList = ref([])
 const uploadForm = ref({ category: 'general', description: '' })
@@ -207,6 +232,10 @@ const fetchSetting = async () => {
     const res = await getStudentUploadSetting()
     studentUploadEnabled.value = (res.data || res).enabled
   } catch (e) { /* ignore */ }
+  try {
+    const res2 = await getDangerousFileBlockSetting()
+    dangerousBlockEnabled.value = (res2.data || res2).enabled
+  } catch (e) { /* ignore */ }
 }
 
 const toggleStudentUpload = async (val) => {
@@ -215,6 +244,16 @@ const toggleStudentUpload = async (val) => {
     ElMessage.success(val ? '已开启学生上传权限' : '已关闭学生上传权限')
   } catch (e) {
     studentUploadEnabled.value = !val
+    ElMessage.error('设置失败')
+  }
+}
+
+const toggleDangerousBlock = async (val) => {
+  try {
+    await setDangerousFileBlockSetting(val)
+    ElMessage.success(val ? '已开启危险文件拦截' : '已关闭危险文件拦截')
+  } catch (e) {
+    dangerousBlockEnabled.value = !val
     ElMessage.error('设置失败')
   }
 }
@@ -238,20 +277,38 @@ const submitUpload = async () => {
   }
   uploading.value = true
   try {
-    const formData = new FormData()
-    formData.append('file', uploadFileList.value[0].raw)
-    formData.append('originalFilename', uploadFileList.value[0].name) // 前端正确UTF-8文件名
-    formData.append('uploaderRole', 'admin')
-    formData.append('uploaderId', 'admin')
-    formData.append('uploaderName', '管理员')
-    formData.append('category', uploadForm.value.category)
-    formData.append('description', uploadForm.value.description)
-    await uploadFile(formData)
+    const rawFile = uploadFileList.value[0].raw
+    const uploadOptions = {
+      category: uploadForm.value.category,
+      uploaderRole: 'admin',
+      uploaderId: 'admin',
+      uploaderName: '管理员'
+    }
+
+    if (rawFile.size > 5 * 1024 * 1024) {
+      // 大文件：分片上传
+      await uploadFileChunked(rawFile, uploadOptions, (progress) => {
+        uploadProgress.value = progress
+      })
+    } else {
+      // 小文件：普通上传
+      const formData = new FormData()
+      formData.append('file', rawFile)
+      formData.append('originalFilename', uploadFileList.value[0].name)
+      formData.append('uploaderRole', 'admin')
+      formData.append('uploaderId', 'admin')
+      formData.append('uploaderName', '管理员')
+      formData.append('category', uploadForm.value.category)
+      formData.append('description', uploadForm.value.description)
+      await uploadFile(formData)
+    }
     ElMessage.success('上传成功')
     uploadDialogVisible.value = false
+    uploadProgress.value = 0
+    uploadFileList.value = []
     fetchData()
   } catch (e) {
-    ElMessage.error('上传失败')
+    ElMessage.error('上传失败: ' + (e.response?.data?.message || e.message))
   } finally {
     uploading.value = false
   }
@@ -262,6 +319,36 @@ const handleDownload = async (row) => {
     await downloadFile(row.id, row.original_name)
   } catch (e) {
     ElMessage.error('下载失败')
+  }
+}
+
+const previewImageUrl = ref('')
+const previewVisible = ref(false)
+
+const handlePreview = async (row) => {
+  try {
+    // 先尝试 JSON（serverless 环境返回 base64）
+    const res = await api.get(`/files/${row.id}/download`)
+    if (res.data && res.data.base64) {
+      const binary = atob(res.data.base64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob = new Blob([bytes], { type: res.data.fileType || row.file_type })
+      previewImageUrl.value = URL.createObjectURL(blob)
+      previewVisible.value = true
+      return
+    }
+  } catch (e) {
+    // 不是 JSON，继续 blob
+  }
+  // 传统环境：直接 blob
+  try {
+    const res = await api.get(`/files/${row.id}/download`, { responseType: 'blob' })
+    const blob = new Blob([res.data], { type: row.file_type })
+    previewImageUrl.value = URL.createObjectURL(blob)
+    previewVisible.value = true
+  } catch (e) {
+    ElMessage.error('预览失败')
   }
 }
 
@@ -329,6 +416,12 @@ onMounted(() => {
   fetchData()
   fetchSetting()
 })
+
+onBeforeUnmount(() => {
+  if (previewImageUrl.value) {
+    URL.revokeObjectURL(previewImageUrl.value)
+  }
+})
 </script>
 
 <style scoped>
@@ -349,4 +442,16 @@ onMounted(() => {
 .name-text { font-weight: 500; color: #1e293b; word-break: break-all; }
 .upload-text { margin-top: 8px; font-size: 14px; color: #94a3b8; }
 .upload-text em { color: #1a56db; font-style: normal; }
+
+/* 上传弹窗内拖拽区域样式修复 */
+:deep(.el-upload-dragger) {
+  width: 100% !important;
+  padding: 20px !important;
+}
+:deep(.el-upload) {
+  width: 100%;
+}
+:deep(.el-upload-dragger .el-icon) {
+  margin-bottom: 8px;
+}
 </style>

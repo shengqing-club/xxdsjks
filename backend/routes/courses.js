@@ -63,4 +63,17 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   }
 })
 
+// 管理员：批量删除课程
+router.post('/batch-delete', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { ids } = req.body
+    if (!ids || !ids.length) return res.status(400).json({ message: '请选择要删除的课程' })
+    const result = await pool.query('DELETE FROM courses WHERE id = ANY($1)', [ids])
+    res.json({ message: `成功删除 ${result.rowCount} 门课程` })
+  } catch (e) {
+    console.error('批量删除课程失败:', e)
+    res.status(500).json({ message: '批量删除失败' })
+  }
+})
+
 export default router

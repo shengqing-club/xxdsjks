@@ -18,11 +18,17 @@ const pool = new Pool({
   max: isServerless ? 3 : 20,
   idleTimeoutMillis: isServerless ? 10000 : 30000,
   connectionTimeoutMillis: 10000,
+  allowExitOnIdle: true,
+  ssl: { rejectUnauthorized: false },
 })
 
-// 每个新连接设置时区为北京时间
-pool.on('connect', (client) => {
-  client.query("SET timezone = 'Asia/Shanghai'").catch(() => {})
+// 每个新连接设置时区为北京时间（使用 async 避免并发 query 警告）
+pool.on('connect', async (client) => {
+  try {
+    await client.query("SET timezone = 'Asia/Shanghai'")
+  } catch {
+    // ignore
+  }
 })
 
 pool.on('error', (err) => {

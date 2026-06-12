@@ -187,9 +187,10 @@ router.get('/download/:message_id', async (req, res) => {
     }
 
     const fileBuffer = Buffer.isBuffer(msg.file_data) ? msg.file_data : Buffer.from(msg.file_data)
+    const fileType = msg.file_type || 'application/octet-stream'
 
-    res.setHeader('Content-Type', 'application/octet-stream')
-    const encodedName = encodeURIComponent(msg.file_name || 'download').replace(/['()]/g, escape)
+    res.setHeader('Content-Type', fileType)
+    const encodedName = encodeURIComponent(msg.file_name || 'download').replace(/['()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
     res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
     res.setHeader('Content-Length', fileBuffer.length)
 
@@ -198,7 +199,7 @@ router.get('/download/:message_id', async (req, res) => {
       res.json({
         base64: fileBuffer.toString('base64'),
         fileName: msg.file_name || 'download',
-        fileType: 'application/octet-stream',
+        fileType: fileType,
         fileSize: fileBuffer.length
       })
     } else {

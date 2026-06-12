@@ -16,7 +16,7 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// 响应拦截器：401 自动跳转登录，统一错误处理
+// 响应拦截器：401 自动跳转登录，Token 自动刷新，统一错误处理
 api.interceptors.response.use(
   (res) => {
     // 如果响应本身是 401，也跳转
@@ -25,6 +25,11 @@ api.interceptors.response.use(
       localStorage.removeItem('user')
       window.location.href = '/login'
       return Promise.reject(new Error('未登录或Token已过期'))
+    }
+    // Token 自动刷新：后端在 token 即将过期时返回新 token
+    const newToken = res.headers['x-refresh-token']
+    if (newToken) {
+      localStorage.setItem('token', newToken)
     }
     return res
   },
