@@ -480,6 +480,50 @@ async function migrate() {
     `)
     console.log('✓ photo_wall 表')
 
+    // ====== 19. 论坛帖子表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forum_posts (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(200) NOT NULL,
+        content TEXT NOT NULL,
+        category VARCHAR(50) DEFAULT '综合',
+        author_id VARCHAR(30) NOT NULL,
+        author_name VARCHAR(50),
+        author_role VARCHAR(10) DEFAULT 'student',
+        pinned BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ forum_posts 表')
+
+    // ====== 20. 论坛评论表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forum_comments (
+        id SERIAL PRIMARY KEY,
+        post_id INT REFERENCES forum_posts(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        author_id VARCHAR(30) NOT NULL,
+        author_name VARCHAR(50),
+        author_role VARCHAR(10) DEFAULT 'student',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    console.log('✓ forum_comments 表')
+
+    // ====== 21. 论坛点赞表 ======
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forum_likes (
+        id SERIAL PRIMARY KEY,
+        post_id INT REFERENCES forum_posts(id) ON DELETE CASCADE,
+        user_id VARCHAR(30) NOT NULL,
+        user_name VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(post_id, user_id)
+      )
+    `)
+    console.log('✓ forum_likes 表')
+
     // ====== 列宽修复（已有表可能列宽不足） ======
     const alterCols = [
       ['study_materials', 'file_type', 'VARCHAR(100)'],

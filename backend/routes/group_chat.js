@@ -2,6 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db.js'
 import { authMiddleware } from '../middleware/auth.js'
+import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
 
 const router = Router()
 router.use(authMiddleware)
@@ -210,5 +211,14 @@ router.get('/download/:message_id', async (req, res) => {
     res.status(500).json({ message: '下载失败' })
   }
 })
+
+// 分片下载聊天文件（绕过 Netlify 6MB 限制）
+router.get('/download/:message_id/chunk', createChunkedDownloadHandler({
+  tableName: 'group_chat_messages',
+  idColumn: 'id',
+  dataColumn: 'file_data',
+  nameColumn: 'file_name',
+  typeColumn: 'file_type'
+}))
 
 export default router

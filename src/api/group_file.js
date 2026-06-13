@@ -1,4 +1,5 @@
 import api from './index'
+import { smartDownload } from './utils'
 
 // 获取分组文件列表
 export function getGroupFiles(group_id) {
@@ -12,35 +13,14 @@ export function uploadGroupFile(group_id, formData) {
   })
 }
 
-// 下载分组文件（兼容 serverless）
-export async function downloadGroupFile(file_id, fileName) {
-  const url = `/group-files/download/${file_id}`
-  try {
-    const res = await api.get(url)
-    if (res.data && res.data.base64) {
-      const binary = atob(res.data.base64)
-      const bytes = new Uint8Array(binary.length)
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-      const blob = new Blob([bytes], { type: res.data.fileType || 'application/octet-stream' })
-      const link = document.createElement('a')
-      link.href = URL.createObjectURL(blob)
-      link.download = fileName || res.data.fileName || 'download'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(link.href)
-      return
-    }
-  } catch (e) { /* fallback */ }
-  const res = await api.get(url, { responseType: 'blob' })
-  const blob = new Blob([res.data])
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = fileName || 'download'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(link.href)
+export function downloadGroupFile(file_id, fileName, fileSize, fileType, onProgress) {
+  return smartDownload(
+    `/group-files/download/${file_id}`,
+    `/group-files/download/${file_id}/chunk`,
+    { fileSize, fileType },
+    fileName,
+    onProgress
+  )
 }
 
 // 删除分组文件

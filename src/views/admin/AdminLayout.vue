@@ -119,6 +119,11 @@
             <span>照片墙管理</span>
           </el-menu-item>
 
+          <el-menu-item index="/forum">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>论坛管理</span>
+          </el-menu-item>
+
           <el-sub-menu index="data-visual">
             <template #title>
               <el-icon><DataAnalysis /></el-icon>
@@ -175,6 +180,7 @@ import {
   Setting,
   Trophy,
   Picture,
+  ChatDotRound,
   Moon,
   Sunny
 } from '@element-plus/icons-vue'

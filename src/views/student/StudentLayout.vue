@@ -136,6 +136,10 @@ onUnmounted(() => {
             <el-icon><Picture /></el-icon>
             <span>照片墙</span>
           </el-menu-item>
+          <el-menu-item index="/student/forum">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>论坛</span>
+          </el-menu-item>
           <el-menu-item index="/student/password">
             <el-icon><Lock /></el-icon>
             <span>修改密码</span>

@@ -20,6 +20,7 @@ import groupFileRoutes from './routes/group_files.js'
 import settingsRoutes from './routes/settings.js'
 import rewardRoutes from './routes/rewards.js'
 import photoWallRoutes from './routes/photo_wall.js'
+import forumRoutes from './routes/forum.js'
 
 const app = express()
 
@@ -75,6 +76,7 @@ app.use('/api/group-files', groupFileRoutes)
 app.use('/api/settings', settingsRoutes)
 app.use('/api/rewards', rewardRoutes)
 app.use('/api/photo-wall', photoWallRoutes)
+app.use('/api/forum', forumRoutes)
 
 // 健康检查
 app.get('/api/health', async (req, res) => {

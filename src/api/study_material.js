@@ -1,4 +1,5 @@
 import api from './index'
+import { smartDownload } from './utils'
 
 /**
  * 通用文件下载函数
@@ -99,9 +100,15 @@ export function deleteStudyMaterial(id) {
   return api.delete(`/study-materials/${id}`)
 }
 
-// 下载复习资料（兼容 serverless）
-export function downloadStudyMaterial(id, fileName) {
-  return downloadFileFromApi(`/study-materials/download/${id}`, fileName)
+// 下载复习资料（智能分片下载，绕过 Netlify 6MB 限制）
+export function downloadStudyMaterial(id, fileName, fileSize, fileType, onProgress) {
+  return smartDownload(
+    `/study-materials/download/${id}`,
+    `/study-materials/download/${id}/chunk`,
+    { fileSize, fileType },
+    fileName,
+    onProgress
+  )
 }
 
 // 获取版本历史

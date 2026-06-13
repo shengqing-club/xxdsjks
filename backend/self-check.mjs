@@ -119,6 +119,38 @@ async function check() {
     fs.unlinkSync('test_import_check.xlsx')
   } catch (e) { err('Excel导入失败', e.response?.data?.message || e.message) }
 
+  // 12. 论坛功能
+  console.log('\n12. 论坛功能')
+  try {
+    const { data: post } = await axios.post(`${API}/forum/posts`, { title: '自检测试帖', content: '自检测试内容', category: '综合' }, { headers })
+    const { data: detail } = await axios.get(`${API}/forum/posts/${post.id}`, { headers })
+    await axios.post(`${API}/forum/posts/${post.id}/comments`, { content: '自检评论' }, { headers })
+    await axios.post(`${API}/forum/posts/${post.id}/like`, {}, { headers })
+    const { data: updated } = await axios.get(`${API}/forum/posts/${post.id}`, { headers })
+    await axios.delete(`${API}/forum/posts/${post.id}`, { headers })
+    ok(`论坛: 发帖/评论/点赞/删除正常 (like=${updated.like_count}, comments=${updated.comment_count})`)
+  } catch (e) { err('论坛功能失败', e.response?.data?.message || e.message) }
+
+  // 13. 分片下载
+  console.log('\n13. 分片下载（大文件）')
+  try {
+    const FormData = (await import('form-data')).default
+    const fs = await import('fs')
+    const buf = Buffer.alloc(5 * 1024 * 1024, 0x42)
+    fs.writeFileSync('test_chunk.bin', buf)
+    const form = new FormData()
+    form.append('file', fs.createReadStream('test_chunk.bin'), { filename: 'test_chunk.bin', contentType: 'application/octet-stream' })
+    form.append('title', '自检大文件')
+    form.append('course_name', '自检')
+    form.append('class_name', '自检')
+    const { data: up } = await axios.post(`${API}/study-materials/upload`, form, { headers: { ...headers, ...form.getHeaders() }, timeout: 60000 })
+    const { data: c0 } = await axios.get(`${API}/study-materials/download/${up.id}/chunk?chunk=0`, { headers })
+    const totalOk = c0.totalSize === 5 * 1024 * 1024 && c0.totalChunks >= 1 && c0.base64.length > 0
+    await axios.delete(`${API}/study-materials/${up.id}`, { headers })
+    fs.unlinkSync('test_chunk.bin')
+    ok(`分片下载: 5MB文件分为${c0.totalChunks}片, 总大小${c0.totalSize}`)
+  } catch (e) { err('分片下载失败', e.response?.data?.message || e.message) }
+
   console.log('\n========== 自检结果 ==========')
   console.log(`通过: ${passed} 项`)
   console.log(`失败: ${failed} 项`)

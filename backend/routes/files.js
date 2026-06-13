@@ -2,6 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db.js'
 import { authMiddleware } from '../middleware/auth.js'
+import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
 
 const router = Router()
 router.use(authMiddleware)
@@ -258,6 +259,15 @@ router.get('/:id/download', async (req, res) => {
     res.status(500).json({ message: '下载失败' })
   }
 })
+
+// 分片下载文件（绕过 Netlify 6MB 限制）
+router.get('/:id/download/chunk', createChunkedDownloadHandler({
+  tableName: 'files',
+  idColumn: 'id',
+  dataColumn: 'file_data',
+  nameColumn: 'original_name',
+  typeColumn: 'file_type'
+}))
 
 // 删除文件
 router.delete('/:id', async (req, res) => {

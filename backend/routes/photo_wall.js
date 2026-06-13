@@ -2,6 +2,7 @@ import { Router } from 'express'
 import pool from '../db.js'
 import { authMiddleware } from '../middleware/auth.js'
 import multer from 'multer'
+import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
 
 const router = Router()
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
@@ -102,6 +103,15 @@ router.get('/download/:id', authMiddleware, async (req, res) => {
     res.status(500).json({ message: '下载失败' })
   }
 })
+
+// 分片下载照片（绕过 Netlify 6MB 限制）
+router.get('/download/:id/chunk', createChunkedDownloadHandler({
+  tableName: 'photo_wall',
+  idColumn: 'id',
+  dataColumn: 'file_data',
+  nameColumn: "'photo'",
+  typeColumn: 'file_type'
+}))
 
 // 删除照片（管理员或上传者本人）
 router.delete('/:id', authMiddleware, async (req, res) => {
