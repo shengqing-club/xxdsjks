@@ -68,9 +68,6 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
 // API 路由
 app.use('/api/auth', authRoutes)
-app.get('/api/test-auth', (req, res) => {
-  res.json({ ok: true, authRoutesType: typeof authRoutes, authRoutesName: authRoutes?.constructor?.name })
-})
 app.use('/api/students', studentRoutes)
 app.use('/api/grades', gradeRoutes)
 app.use('/api/announcements', announcementRoutes)
