@@ -45,7 +45,7 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
-    await changePassword(user.value.username, form.oldPassword, form.newPassword)
+    await changePassword({ oldPassword: form.oldPassword, newPassword: form.newPassword })
     ElMessage.success('密码修改成功')
     // Reset form
     form.oldPassword = ''

@@ -54,6 +54,7 @@ const routes = [
       { path: 'password', name: 'ChangePassword', component: () => import('../views/student/ChangePassword.vue') },
     ],
   },
+  { path: '/:pathMatch(.*)*', redirect: '/login' },
 ]
 
 const router = createRouter({

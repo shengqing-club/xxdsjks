@@ -101,7 +101,7 @@ const openDialog = (row = null) => {
 }
 
 const submitForm = async () => {
-  await formRef.value.validate()
+  try { await formRef.value.validate() } catch { return }
   submitting.value = true
   try {
     if (isEdit.value) {

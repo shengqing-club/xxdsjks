@@ -8,6 +8,7 @@
 [functions]
   node_bundler = "esbuild"
 
+# SPA 回退（必须在 API 重定向之后）
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"

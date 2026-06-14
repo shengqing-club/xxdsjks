@@ -182,20 +182,14 @@ router.post('/:id/members', async (req, res) => {
     }
     const student = studentResult.rows[0]
 
-    // 检查是否已在分组中
-    const existCheck = await pool.query(
-      'SELECT 1 FROM group_members WHERE group_id = $1 AND student_id = $2',
-      [groupId, student_id]
-    )
-    if (existCheck.rows.length > 0) {
-      return res.status(400).json({ message: '该学生已在分组中' })
-    }
-
     const result = await pool.query(
       `INSERT INTO group_members (group_id, student_id, student_name, role)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
+       VALUES ($1,$2,$3,$4) ON CONFLICT (group_id, student_id) DO NOTHING RETURNING *`,
       [groupId, student_id, student.name, 'member']
     )
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: '该学生已在分组中' })
+    }
     res.status(201).json(result.rows[0])
   } catch (e) {
     res.status(500).json({ message: '添加成员失败' })

@@ -1,35 +1,57 @@
+// 最先加载环境变量，确保后续所有模块都能读取到 process.env
+const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+if (!isServerless) {
+  try {
+    const dotenv = await import('dotenv')
+    const mod = dotenv.default || dotenv
+    if (mod && mod.config) mod.config()
+  } catch { /* ignore */ }
+}
+
 import express from 'express'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
-import pool from './db.js'
-import authRoutes from './routes/auth.js'
-import studentRoutes from './routes/students.js'
-import gradeRoutes from './routes/grades.js'
-import announcementRoutes from './routes/announcements.js'
-import chatRoutes from './routes/chat.js'
-import majorRoutes from './routes/majors.js'
-import fileRoutes from './routes/files.js'
-import examRoutes from './routes/exams.js'
-import notificationRoutes from './routes/notifications.js'
-import studyMaterialRoutes from './routes/study_materials.js'
-import courseRoutes from './routes/courses.js'
-import classRoutes from './routes/classes.js'
-import groupRoutes from './routes/groups.js'
-import groupChatRoutes from './routes/group_chat.js'
-import groupFileRoutes from './routes/group_files.js'
-import settingsRoutes from './routes/settings.js'
-import rewardRoutes from './routes/rewards.js'
-import photoWallRoutes from './routes/photo_wall.js'
-import forumRoutes from './routes/forum.js'
+
+// 动态导入 db 和路由，确保 dotenv 已加载
+const { default: pool } = await import('./db.js')
+const { default: authRoutes } = await import('./routes/auth.js')
+const { default: studentRoutes } = await import('./routes/students.js')
+const { default: gradeRoutes } = await import('./routes/grades.js')
+const { default: announcementRoutes } = await import('./routes/announcements.js')
+const { default: chatRoutes } = await import('./routes/chat.js')
+const { default: majorRoutes } = await import('./routes/majors.js')
+const { default: fileRoutes } = await import('./routes/files.js')
+const { default: examRoutes } = await import('./routes/exams.js')
+const { default: notificationRoutes } = await import('./routes/notifications.js')
+const { default: studyMaterialRoutes } = await import('./routes/study_materials.js')
+const { default: courseRoutes } = await import('./routes/courses.js')
+const { default: classRoutes } = await import('./routes/classes.js')
+const { default: groupRoutes } = await import('./routes/groups.js')
+const { default: groupChatRoutes } = await import('./routes/group_chat.js')
+const { default: groupFileRoutes } = await import('./routes/group_files.js')
+const { default: settingsRoutes } = await import('./routes/settings.js')
+const { default: rewardRoutes } = await import('./routes/rewards.js')
+const { default: photoWallRoutes } = await import('./routes/photo_wall.js')
+const { default: forumRoutes } = await import('./routes/forum.js')
 
 const app = express()
 
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [process.env.FRONTEND_URL || 'https://xxdshijianks.netlify.app']
-  : ['http://localhost:8080', 'http://localhost:5173']
+const isNetlify = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+const allowedOrigins = process.env.NODE_ENV === 'production' || isNetlify
+  ? [
+      process.env.FRONTEND_URL || 'https://xxdsjks.netlify.app',
+      'https://xxdsjks.netlify.app',
+      // 支持 Netlify Deploy Preview 的通配子域名
+      ...(process.env.NETLIFY_PREVIEW_URL ? [process.env.NETLIFY_PREVIEW_URL] : [])
+    ]
+  : true // 开发环境允许所有来源
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+    // 开发环境允许所有 localhost 来源，生产环境检查白名单
+    if (!origin || (process.env.NODE_ENV !== 'production' && !isNetlify && origin.startsWith('http://localhost'))) {
+      return callback(null, true)
+    }
+    if (allowedOrigins.includes(origin)) return callback(null, true)
     callback(new Error('Not allowed by CORS'))
   },
   credentials: true
@@ -45,7 +67,7 @@ const generalLimiter = rateLimit({
 })
 const uploadLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: '上传过于频繁，请稍后再试' }
@@ -115,7 +137,6 @@ async function cleanupStaleUploads() {
 
 // 仅在直接运行（非 Netlify Functions）时启动 HTTP 服务器
 const PORT = process.env.PORT || 8081
-const isNetlify = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT || !!process.env.NETLIFY_DEV
 if (!isNetlify) {
   import('http').then(({ createServer }) => {
     const httpServer = createServer(app)

@@ -131,7 +131,7 @@ const handleExport = () => {
   const ws = XLSX.utils.json_to_sheet(data)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '成绩排名')
-  XLSX.writeFile(wb, `成绩排名_${localDateStr()}.xlsx`)
+  XLSX.writeFile(wb, `成绩排名_${new Date().toLocaleDateString('zh-CN')}.xlsx`)
   ElMessage.success('导出成功')
 }
 

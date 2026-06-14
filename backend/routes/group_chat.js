@@ -8,7 +8,8 @@ import { decodeMultipartFilename } from '../utils/decodeFilename.js'
 const router = Router()
 router.use(authMiddleware)
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
+const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: isServerless ? 6 * 1024 * 1024 : 20 * 1024 * 1024 } })
 
 // MIME 类型映射
 const mimeTypes = {
@@ -183,6 +184,15 @@ router.get('/download/:message_id', async (req, res) => {
 
     const fileBuffer = Buffer.isBuffer(msg.file_data) ? msg.file_data : Buffer.from(msg.file_data)
     const fileType = msg.file_type || 'application/octet-stream'
+
+    // 超过 2MB 的文件禁止直接下载，前端应使用分片下载
+    if (fileBuffer.length > 2 * 1024 * 1024) {
+      return res.status(413).json({
+        message: '文件过大，请使用分片下载',
+        fileSize: fileBuffer.length,
+        useChunked: true
+      })
+    }
 
     res.json({
       base64: fileBuffer.toString('base64'),

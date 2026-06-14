@@ -1,60 +1,19 @@
 import api from './index'
 import { smartDownload } from './utils'
 
-/**
- * 通用文件下载函数
- * 兼容 serverless 环境（Netlify）返回 base64 JSON 和传统服务器返回 blob
- */
-export async function downloadFileFromApi(url, fileName) {
-  // 先尝试普通 JSON 请求（serverless 环境返回 base64）
-  try {
-    const res = await api.get(url)
-    const data = res.data
-    if (data && data.base64) {
-      // serverless 环境：base64 JSON 格式
-      const binary = atob(data.base64)
-      const bytes = new Uint8Array(binary.length)
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i)
-      }
-      const blob = new Blob([bytes], { type: data.fileType || 'application/octet-stream' })
-      const link = document.createElement('a')
-      link.href = URL.createObjectURL(blob)
-      link.download = fileName || data.fileName || 'download'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(link.href)
-      return
-    }
-  } catch (e) {
-    // 不是 JSON 响应，继续尝试 blob 下载
-  }
-
-  // 传统环境：直接 blob 下载
-  const res = await api.get(url, { responseType: 'blob' })
-  const blob = new Blob([res.data])
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = fileName || 'download'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(link.href)
-}
-
 // 获取复习资料列表
 export function getStudyMaterials(params) {
   return api.get('/study-materials', { params })
 }
 
-// 上传复习资料
+// 上传复习资料（普通上传，小文件）
 export function uploadStudyMaterial(formData) {
-  return api.post('/study-materials/upload', formData)
+  return api.post('/study-materials/upload', formData, { timeout: 300000 })
 }
 
-// 分片上传（绕过 Netlify 6MB 限制）
-const CHUNK_SIZE = 4 * 1024 * 1024 // 4MB per chunk
+// 分片上传
+const CHUNK_SIZE = 4 * 1024 * 1024 // 4MB
+const UPLOAD_PARALLEL = 2 // 并行上传数
 
 export async function uploadStudyMaterialChunked(file, options = {}, onProgress) {
   const { title, course_name, class_name } = options
@@ -69,29 +28,43 @@ export async function uploadStudyMaterialChunked(file, options = {}, onProgress)
     title: title || file.name,
     course_name: course_name || '',
     class_name: class_name || ''
-  }, { timeout: 120000 })
+  }, { timeout: 300000 })
   const { uploadId } = initRes.data
 
-  // 2. 逐片上传
+  // 2. 并行上传分片
+  let completedChunks = 0
+  const chunkPromises = []
+
   for (let i = 0; i < totalChunks; i++) {
     const start = i * CHUNK_SIZE
     const end = Math.min(start + CHUNK_SIZE, file.size)
     const chunk = file.slice(start, end)
 
-    const formData = new FormData()
-    formData.append('chunk', chunk)
-
-    await api.post(`/study-materials/upload/chunked/${uploadId}/${i}`, formData, {
-      timeout: 60000
-    })
-
-    if (onProgress) {
-      onProgress(Math.round(((i + 1) / totalChunks) * 100))
+    if (chunkPromises.length >= UPLOAD_PARALLEL) {
+      await Promise.race(chunkPromises)
     }
+
+    const promise = (async (chunkIndex) => {
+      const formData = new FormData()
+      formData.append('chunk', chunk)
+      try {
+        await api.post(`/study-materials/upload/chunked/${uploadId}/${chunkIndex}`, formData, {
+          timeout: 120000
+        })
+        completedChunks++
+        if (onProgress) onProgress(Math.round((completedChunks / totalChunks) * 100))
+      } catch (e) {
+        throw new Error(`分片 ${chunkIndex} 上传失败: ${e.message}`)
+      }
+    })(i)
+
+    chunkPromises.push(promise)
   }
 
+  await Promise.all(chunkPromises)
+
   // 3. 完成合并
-  const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`, null, { timeout: 120000 })
+  const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`, null, { timeout: 300000 })
   return completeRes.data
 }
 
@@ -100,7 +73,7 @@ export function deleteStudyMaterial(id) {
   return api.delete(`/study-materials/${id}`)
 }
 
-// 下载复习资料（智能分片下载，绕过 Netlify 6MB 限制）
+// 下载复习资料（智能分片下载）
 export function downloadStudyMaterial(id, fileName, fileSize, fileType, onProgress) {
   return smartDownload(
     `/study-materials/download/${id}`,
@@ -130,21 +103,34 @@ export async function uploadStudyMaterialNewVersion(file, versionGroup, options 
     course_name: course_name || '',
     class_name: class_name || '',
     version_group: versionGroup
-  }, { timeout: 120000 })
+  }, { timeout: 300000 })
   const { uploadId } = initRes.data
+
+  let completedChunks = 0
+  const chunkPromises = []
 
   for (let i = 0; i < totalChunks; i++) {
     const start = i * CHUNK_SIZE
     const end = Math.min(start + CHUNK_SIZE, file.size)
     const chunk = file.slice(start, end)
-    const formData = new FormData()
-    formData.append('chunk', chunk)
-    await api.post(`/study-materials/upload/chunked/${uploadId}/${i}`, formData, { timeout: 60000 })
-    if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100))
+
+    if (chunkPromises.length >= UPLOAD_PARALLEL) {
+      await Promise.race(chunkPromises)
+    }
+
+    const promise = (async (chunkIndex) => {
+      const formData = new FormData()
+      formData.append('chunk', chunk)
+      await api.post(`/study-materials/upload/chunked/${uploadId}/${chunkIndex}`, formData, { timeout: 120000 })
+      completedChunks++
+      if (onProgress) onProgress(Math.round((completedChunks / totalChunks) * 100))
+    })(i)
+
+    chunkPromises.push(promise)
   }
 
- const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`, null, { timeout: 120000 })
+  await Promise.all(chunkPromises)
+
+  const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`, null, { timeout: 300000 })
   return completeRes.data
 }
-
-// 删除复习资料

@@ -2,35 +2,37 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db.js'
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js'
-import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
+import { createChunkedDownloadHandler, createStreamingDownloadHandler } from '../utils/chunkedDownload.js'
 import { decodeMultipartFilename } from '../utils/decodeFilename.js'
+import crypto from 'crypto'
 
 const router = Router()
 router.use(authMiddleware)
 
 // 使用 memoryStorage（兼容 Netlify serverless 环境）
+const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }
+  limits: { fileSize: isServerless ? 6 * 1024 * 1024 : 50 * 1024 * 1024 }
 })
 
-// 确保 file_data 列存在
-const ensureFileDataColumn = async () => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT column_name FROM information_schema.columns WHERE table_name='files' AND column_name='file_data'`
-    )
-    if (rows.length === 0) {
-      await pool.query('ALTER TABLE files ADD COLUMN file_data BYTEA')
-      console.log('已添加 files.file_data 列')
-    }
-  } catch (e) {
-    // 忽略列已存在等错误
-  }
-}
-ensureFileDataColumn().catch(() => {})
+// 预创建表（启动时执行一次，避免每次 init 都执行 CREATE TABLE）
+pool.query(`
+  CREATE TABLE IF NOT EXISTS upload_chunks (
+    upload_id TEXT, chunk_index INT, chunk_data BYTEA, PRIMARY KEY (upload_id, chunk_index)
+  )
+`).catch(() => {})
 
-// ========== 设置路由（必须在 /:id 路由之前，避免被参数匹配拦截） ==========
+pool.query(`
+  CREATE TABLE IF NOT EXISTS upload_sessions (
+    upload_id TEXT PRIMARY KEY,
+    file_name TEXT, file_size BIGINT, file_type TEXT, total_chunks INT, received_chunks INT DEFAULT 0,
+    title TEXT, course_name TEXT, class_name TEXT, uploader_id TEXT, uploader_name TEXT, uploader_role TEXT,
+    category TEXT, version_group TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )
+`).catch(() => {})
+
+// ========== 设置路由 ==========
 
 let studentUploadEnabled = true
 router.get('/setting/student-upload', authMiddleware, async (req, res) => {
@@ -82,19 +84,7 @@ router.post('/upload/chunked/init', async (req, res) => {
     const { fileName, fileSize, fileType, totalChunks, category, uploaderRole, uploaderId, uploaderName } = req.body
     if (!fileName || !totalChunks) return res.status(400).json({ message: '参数不完整' })
 
-    const uploadId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS upload_sessions (
-        upload_id TEXT PRIMARY KEY,
-        file_name TEXT, file_size BIGINT, file_type TEXT, total_chunks INT, received_chunks INT DEFAULT 0,
-        title TEXT, course_name TEXT, class_name TEXT, uploader_id TEXT, uploader_name TEXT, uploader_role TEXT,
-        category TEXT, version_group TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
-    try {
-      await pool.query(`ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS category TEXT`)
-    } catch (e) { /* ignore */ }
+    const uploadId = crypto.randomBytes(12).toString('hex')
 
     await pool.query(
       `INSERT INTO upload_sessions (upload_id, file_name, file_size, file_type, total_chunks, uploader_id, uploader_name, uploader_role, category)
@@ -108,7 +98,7 @@ router.post('/upload/chunked/init', async (req, res) => {
 
     res.json({ uploadId, chunkSize: 4 * 1024 * 1024 })
   } catch (e) {
-    res.status(500).json({ message: '初始化失败' })
+    res.status(500).json({ message: '初始化失败: ' + e.message })
   }
 })
 
@@ -134,7 +124,7 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
     const mergedData = mergeRes.rows[0]?.merged_data
     if (!mergedData) return res.status(500).json({ message: '合并数据失败' })
 
-    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9)
+    const uniqueName = Date.now() + '-' + crypto.randomBytes(4).toString('hex')
 
     const result = await pool.query(
       `INSERT INTO files (filename, original_name, file_size, file_type, category, uploader_role, uploader_id, uploader_name, file_data)
@@ -157,12 +147,6 @@ router.post('/upload/chunked/:uploadId/:chunkIndex', upload.single('chunk'), asy
     const { uploadId, chunkIndex } = req.params
     if (!req.file) return res.status(400).json({ message: '无文件数据' })
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS upload_chunks (
-        upload_id TEXT, chunk_index INT, chunk_data BYTEA, PRIMARY KEY (upload_id, chunk_index)
-      )
-    `)
-
     await pool.query(
       'INSERT INTO upload_chunks (upload_id, chunk_index, chunk_data) VALUES ($1,$2,$3) ON CONFLICT (upload_id, chunk_index) DO UPDATE SET chunk_data = $3',
       [uploadId, parseInt(chunkIndex), req.file.buffer]
@@ -172,7 +156,7 @@ router.post('/upload/chunked/:uploadId/:chunkIndex', upload.single('chunk'), asy
 
     res.json({ chunkIndex: parseInt(chunkIndex) })
   } catch (e) {
-    res.status(500).json({ message: '分片上传失败' })
+    res.status(500).json({ message: '分片上传失败: ' + e.message })
   }
 })
 
@@ -194,7 +178,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ message: `禁止上传危险文件类型：.${originalName.split('.').pop().toLowerCase()}` })
     }
 
-    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9)
+    const uniqueName = Date.now() + '-' + crypto.randomBytes(4).toString('hex')
 
     const result = await pool.query(
       `INSERT INTO files (filename, original_name, file_size, file_type, category, uploader_role, uploader_id, uploader_name, file_data)
@@ -211,21 +195,39 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
 router.get('/:id/download', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM files WHERE id = $1', [req.params.id])
-    if (result.rows.length === 0) return res.status(404).json({ message: '文件不存在' })
-    const file = result.rows[0]
+    // 先查询元数据（不包含 file_data），避免大文件加载到内存
+    const metaResult = await pool.query(
+      'SELECT id, original_name, file_type, file_size, file_data IS NOT NULL as has_data FROM files WHERE id = $1',
+      [req.params.id]
+    )
+    if (metaResult.rows.length === 0) return res.status(404).json({ message: '文件不存在' })
+    const meta = metaResult.rows[0]
 
-    if (!file.file_data) {
+    if (!meta.has_data) {
       return res.status(404).json({ message: '文件内容已丢失（该文件可能是在旧版系统上传的）' })
     }
 
+    const fileSize = parseInt(meta.file_size, 10) || 0
+
+    // 超过 2MB 的文件禁止直接下载，前端应使用分片下载
+    if (fileSize > 2 * 1024 * 1024) {
+      return res.status(413).json({
+        message: '文件过大，请使用分片下载',
+        fileSize: fileSize,
+        useChunked: true
+      })
+    }
+
+    // 小文件才查询 file_data
+    const result = await pool.query('SELECT file_data FROM files WHERE id = $1', [req.params.id])
+    const file = result.rows[0]
     const fileBuffer = Buffer.isBuffer(file.file_data)
       ? file.file_data
       : Buffer.from(file.file_data)
 
-    let contentType = file.file_type || 'application/octet-stream'
+    let contentType = meta.file_type || 'application/octet-stream'
     if (!contentType || contentType === 'application/x-compressed') {
-      const ext = (file.original_name || '').split('.').pop().toLowerCase()
+      const ext = (meta.original_name || '').split('.').pop().toLowerCase()
       const mimeMap = {
         'rar': 'application/x-rar-compressed', 'zip': 'application/zip', '7z': 'application/x-7z-compressed',
         'tar': 'application/x-tar', 'gz': 'application/gzip', 'pdf': 'application/pdf',
@@ -240,7 +242,7 @@ router.get('/:id/download', async (req, res) => {
 
     res.json({
       base64: fileBuffer.toString('base64'),
-      fileName: file.original_name || 'download',
+      fileName: meta.original_name || 'download',
       fileType: contentType,
       fileSize: fileBuffer.length
     })
@@ -249,8 +251,17 @@ router.get('/:id/download', async (req, res) => {
   }
 })
 
-// 分片下载文件（绕过 Netlify 6MB 限制）
+// 分片下载文件（兼容 Netlify 6MB 限制）
 router.get('/:id/download/chunk', createChunkedDownloadHandler({
+  tableName: 'files',
+  idColumn: 'id',
+  dataColumn: 'file_data',
+  nameColumn: 'original_name',
+  typeColumn: 'file_type'
+}))
+
+// 流式下载文件（非 Serverless 环境，直接二进制流，无 base64 开销）
+router.get('/:id/download/stream', createStreamingDownloadHandler({
   tableName: 'files',
   idColumn: 'id',
   dataColumn: 'file_data',

@@ -13,9 +13,9 @@ export function getPhotos() {
   return api.get('/photo-wall')
 }
 
+// 上传照片（不手动设置 Content-Type，让 axios 自动添加 boundary）
 export function uploadPhoto(formData) {
   return api.post('/photo-wall/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 60000,
   })
 }

@@ -118,7 +118,7 @@ const handleEdit = (row) => { form.value = { ...row }; isEdit.value = true; dial
 
 const submitForm = async () => {
   if (!formRef.value) return
-  await formRef.value.validate()
+  try { await formRef.value.validate() } catch { return }
   submitLoading.value = true
   try {
     const data = { name: form.value.name, code: form.value.code, description: form.value.description }

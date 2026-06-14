@@ -11,10 +11,10 @@ export function sendGroupMessage(group_id, content) {
   return api.post(`/group-chat/${group_id}/send`, { content })
 }
 
-// 上传图片/文件
-export function uploadGroupFile(group_id, formData) {
+// 上传图片/文件（不手动设置 Content-Type，让 axios 自动添加 boundary）
+export function uploadGroupChatFile(group_id, formData) {
   return api.post(`/group-chat/${group_id}/upload`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    timeout: 60000
   })
 }
 

@@ -1,5 +1,8 @@
+// 注意：dotenv 已在 index.js 中提前加载，此处不再重复加载
 import pkg from 'pg'
 const { Pool, types } = pkg
+
+const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
 
 // 覆盖 TIMESTAMP 和 TIMESTAMPTZ 类型解析器
 types.setTypeParser(1114, (val) => val)   // TIMESTAMP (without time zone)
@@ -11,14 +14,13 @@ if (!connectionString) {
 }
 
 // serverless 环境下连接池要小，避免耗尽数据库连接
-const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
 const pool = new Pool({
   connectionString,
   max: isServerless ? 3 : 20,
   idleTimeoutMillis: isServerless ? 10000 : 30000,
   connectionTimeoutMillis: 10000,
-  allowExitOnIdle: true,
-  ssl: { rejectUnauthorized: false },
+  allowExitOnIdle: isServerless,
+  ssl: isServerless ? { rejectUnauthorized: false } : false,
 })
 
 // 每个新连接设置时区为北京时间（使用 async 避免并发 query 警告）

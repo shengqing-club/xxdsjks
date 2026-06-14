@@ -59,7 +59,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Upload, Download, Delete, Document, Picture, VideoPlay, Headset
 } from '@element-plus/icons-vue'
-import { getGroupFiles, uploadGroupFile, downloadGroupFile, deleteGroupFile } from '../api/group_file'
+import { getGroupFiles, uploadGroupSharedFile, downloadGroupFile, deleteGroupFile } from '../api/group_file'
 
 const props = defineProps({
   group: { type: Object, required: true }
@@ -117,7 +117,7 @@ const handleUpload = async (file) => {
   try {
     const formData = new FormData()
     formData.append('file', file.raw)
-    await uploadGroupFile(props.group.id, formData)
+    await uploadGroupSharedFile(props.group.id, formData)
     ElMessage.success('上传成功')
     loadFiles()
   } catch (err) {

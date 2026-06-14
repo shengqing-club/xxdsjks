@@ -2,16 +2,34 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db.js'
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js'
-import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
+import { createChunkedDownloadHandler, createStreamingDownloadHandler } from '../utils/chunkedDownload.js'
 import { decodeMultipartFilename } from '../utils/decodeFilename.js'
+import crypto from 'crypto'
 
 const router = Router()
 router.use(authMiddleware)
 
 // 使用 memoryStorage（兼容 Netlify serverless 环境）
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
+const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: isServerless ? 6 * 1024 * 1024 : 50 * 1024 * 1024 } })
 
-// ========== 分片上传（绕过 Netlify 6MB payload 限制） ==========
+// ========== 分片上传 ==========
+
+// 预创建表（启动时执行一次）
+pool.query(`
+  CREATE TABLE IF NOT EXISTS upload_sessions (
+    upload_id TEXT PRIMARY KEY,
+    file_name TEXT, file_size BIGINT, file_type TEXT, total_chunks INT, received_chunks INT DEFAULT 0,
+    title TEXT, course_name TEXT, class_name TEXT, uploader_id TEXT, uploader_name TEXT, uploader_role TEXT,
+    version_group TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )
+`).catch(() => {})
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS upload_chunks (
+    upload_id TEXT, chunk_index INT, chunk_data BYTEA, PRIMARY KEY (upload_id, chunk_index)
+  )
+`).catch(() => {})
 
 // 初始化分片上传
 router.post('/upload/chunked/init', async (req, res) => {
@@ -23,31 +41,7 @@ router.post('/upload/chunked/init', async (req, res) => {
     const uploaderName = req.user.name || uploaderId
     const uploaderRole = req.user.studentId ? 'student' : 'admin'
 
-    const uploadId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-
-    // 存储上传会话信息到临时表
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS upload_sessions (
-        upload_id TEXT PRIMARY KEY,
-        file_name TEXT,
-        file_size BIGINT,
-        file_type TEXT,
-        total_chunks INT,
-        received_chunks INT DEFAULT 0,
-        title TEXT,
-        course_name TEXT,
-        class_name TEXT,
-        uploader_id TEXT,
-        uploader_name TEXT,
-        uploader_role TEXT,
-        version_group TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `)
-    // 确保 version_group 列存在
-    try {
-      await pool.query(`ALTER TABLE upload_sessions ADD COLUMN IF NOT EXISTS version_group TEXT`)
-    } catch (e) { /* ignore */ }
+    const uploadId = crypto.randomBytes(12).toString('hex')
 
     await pool.query(
       `INSERT INTO upload_sessions (upload_id, file_name, file_size, file_type, total_chunks, title, course_name, class_name, uploader_id, uploader_name, uploader_role, version_group)
@@ -55,9 +49,9 @@ router.post('/upload/chunked/init', async (req, res) => {
       [uploadId, fileName, fileSize, fileType, parseInt(totalChunks), title || fileName, course_name || null, class_name || null, uploaderId, uploaderName, uploaderRole, version_group || null]
     )
 
-    res.json({ uploadId, chunkSize: 4 * 1024 * 1024 }) // 每片 4MB
+    res.json({ uploadId, chunkSize: 4 * 1024 * 1024 })
   } catch (e) {
-    res.status(500).json({ message: '初始化失败' })
+    res.status(500).json({ message: '初始化失败: ' + e.message })
   }
 })
 
@@ -84,7 +78,7 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
     if (!mergedData) return res.status(500).json({ message: '合并数据失败' })
 
     // 生成版本组 ID（首次上传）
-    const versionGroup = s.version_group || `vg-${Date.now()}-${Math.round(Math.random()*1e9)}`
+    const versionGroup = s.version_group || `vg-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
     // 计算版本号
     let versionNumber = 1
     if (s.version_group) {
@@ -113,10 +107,12 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
     if (s.class_name) {
       try {
         const students = await pool.query('SELECT student_id FROM students WHERE class_name = $1', [s.class_name])
-        for (const st of students.rows) {
+        if (students.rows.length > 0) {
+          const ids = students.rows.map(st => st.student_id)
           await pool.query(
-            `INSERT INTO notifications (receiver_id, title, content, type) VALUES ($1, $2, $3, 'material')`,
-            [st.student_id, `新复习资料: ${s.title}`, `课程「${s.course_name || '通用'}」上传了新的复习资料，请及时下载复习。`, 'material']
+            `INSERT INTO notifications (receiver_id, title, content, type)
+             SELECT unnest($1::text[]), $2, $3, 'material'`,
+            [ids, `新复习资料: ${s.title}`, `课程「${s.course_name || '通用'}」上传了新的复习资料，请及时下载复习。`]
           )
         }
       } catch (e) { /* 忽略通知发送失败 */ }
@@ -132,20 +128,11 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
   }
 })
 
-// 上传单个分片 —— 必须在 complete 路由之后
+// 上传单个分片
 router.post('/upload/chunked/:uploadId/:chunkIndex', upload.single('chunk'), async (req, res) => {
   try {
     const { uploadId, chunkIndex } = req.params
     if (!req.file) return res.status(400).json({ message: '无文件数据' })
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS upload_chunks (
-        upload_id TEXT,
-        chunk_index INT,
-        chunk_data BYTEA,
-        PRIMARY KEY (upload_id, chunk_index)
-      )
-    `)
 
     await pool.query(
       'INSERT INTO upload_chunks (upload_id, chunk_index, chunk_data) VALUES ($1, $2, $3) ON CONFLICT (upload_id, chunk_index) DO UPDATE SET chunk_data = $3',
@@ -269,22 +256,23 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       ]
     )
 
-    // 如果指定了班级，给该班所有学生发通知
+    // 如果指定了班级，给该班所有学生发通知（批量插入）
     if (class_name) {
       try {
         const students = await pool.query(
           'SELECT student_id FROM students WHERE class_name = $1',
           [class_name]
         )
-        for (const s of students.rows) {
+        if (students.rows.length > 0) {
+          const ids = students.rows.map(s => s.student_id)
           await pool.query(
             `INSERT INTO notifications (receiver_id, title, content, type)
-             VALUES ($1, $2, $3, 'material')`,
-            [s.student_id, `新复习资料: ${title}`, `课程「${course_name || '通用'}」上传了新的复习资料，请及时下载复习。`, 'material']
+             SELECT unnest($1::text[]), $2, $3, 'material'`,
+            [ids, `新复习资料: ${title}`, `课程「${course_name || '通用'}」上传了新的复习资料，请及时下载复习。`]
           )
         }
       } catch (e) {
-        // 忽略通知发送失败
+        console.error('复习资料通知发送失败:', e)
       }
     }
 
@@ -310,6 +298,15 @@ router.get('/download/:id', async (req, res) => {
       ? material.file_data
       : Buffer.from(material.file_data)
 
+    // 超过 2MB 的文件禁止直接下载，前端应使用分片下载
+    if (fileBuffer.length > 2 * 1024 * 1024) {
+      return res.status(413).json({
+        message: '文件过大，请使用分片下载',
+        fileSize: fileBuffer.length,
+        useChunked: true
+      })
+    }
+
     res.json({
       base64: fileBuffer.toString('base64'),
       fileName: material.file_name || 'download',
@@ -321,8 +318,17 @@ router.get('/download/:id', async (req, res) => {
   }
 })
 
-// 分片下载复习资料（绕过 Netlify 6MB 限制）
+// 分片下载复习资料（兼容 Netlify 6MB 限制）
 router.get('/download/:id/chunk', createChunkedDownloadHandler({
+  tableName: 'study_materials',
+  idColumn: 'id',
+  dataColumn: 'file_data',
+  nameColumn: 'file_name',
+  typeColumn: 'file_type'
+}))
+
+// 流式下载复习资料（非 Serverless 环境，无 base64 开销）
+router.get('/download/:id/stream', createStreamingDownloadHandler({
   tableName: 'study_materials',
   idColumn: 'id',
   dataColumn: 'file_data',

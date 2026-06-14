@@ -1,14 +1,11 @@
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET
-if (!JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET environment variable is not set')
+const JWT_SECRET = process.env.JWT_SECRET || 'xxdshijianks-jwt-default-secret-key-2024'
+if (!process.env.JWT_SECRET) {
+  console.warn('WARNING: JWT_SECRET is not set, using default value. Please set it in production.')
 }
 
 export function signToken(payload) {
-  if (!JWT_SECRET) {
-    throw new Error('JWT_SECRET is not set')
-  }
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' })
 }
 

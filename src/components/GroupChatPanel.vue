@@ -97,7 +97,7 @@ import { ElMessage } from 'element-plus'
 import {
   UserFilled, StarFilled, Document, Picture, FolderOpened, Promotion
 } from '@element-plus/icons-vue'
-import { getGroupMessages, sendGroupMessage, uploadGroupFile, downloadGroupChatFile } from '../api/group_chat'
+import { getGroupMessages, sendGroupMessage, uploadGroupChatFile, downloadGroupChatFile } from '../api/group_chat'
 import api from '../api/index'
 import { useAuth } from '../stores/auth'
 

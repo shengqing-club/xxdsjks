@@ -5,27 +5,55 @@ import multer from 'multer'
 import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
 
 const router = Router()
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
+const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: isServerless ? 6 * 1024 * 1024 : 10 * 1024 * 1024 } })
 
-// 照片墙全局开关
-let photoWallEnabled = true
+// 照片墙开关状态：从数据库 site_settings 表读取（serverless 环境下内存变量不可靠）
+const PHOTO_WALL_KEY = 'photo_wall_enabled'
+
+async function getPhotoWallEnabled() {
+  try {
+    const result = await pool.query("SELECT value FROM site_settings WHERE key = $1", [PHOTO_WALL_KEY])
+    if (result.rows.length > 0) {
+      return result.rows[0].value === 'true'
+    }
+  } catch (e) {
+    console.error('读取照片墙设置失败:', e)
+  }
+  return true // 默认开启
+}
+
+async function setPhotoWallEnabled(enabled) {
+  try {
+    await pool.query(
+      `INSERT INTO site_settings (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [PHOTO_WALL_KEY, String(enabled)]
+    )
+  } catch (e) {
+    console.error('保存照片墙设置失败:', e)
+  }
+}
 
 // 获取照片墙开关状态
-router.get('/setting', (req, res) => {
-  res.json({ enabled: photoWallEnabled })
+router.get('/setting', authMiddleware, async (req, res) => {
+  const enabled = await getPhotoWallEnabled()
+  res.json({ enabled })
 })
 
 // 设置照片墙开关（仅管理员）
 router.post('/setting', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: '无权限' })
-  photoWallEnabled = req.body.enabled
-  res.json({ enabled: photoWallEnabled })
+  const enabled = !!req.body.enabled
+  await setPhotoWallEnabled(enabled)
+  res.json({ enabled })
 })
 
 // 上传照片
 router.post('/upload', authMiddleware, upload.single('file'), async (req, res) => {
   try {
-    if (!photoWallEnabled) return res.status(403).json({ message: '照片墙功能已关闭' })
+    const enabled = await getPhotoWallEnabled()
+    if (!enabled) return res.status(403).json({ message: '照片墙功能已关闭' })
     if (!req.file) return res.status(400).json({ message: '请选择照片' })
     if (!req.file.mimetype.startsWith('image/')) return res.status(400).json({ message: '只能上传图片文件' })
 
@@ -41,14 +69,16 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
 
     res.status(201).json(result.rows[0])
   } catch (e) {
-    res.status(500).json({ message: '上传失败: ' + e.message })
+    console.error('上传照片失败:', e)
+    res.status(500).json({ message: '上传失败' })
   }
 })
 
 // 获取照片列表
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    if (!photoWallEnabled) return res.json({ enabled: false, photos: [] })
+    const enabled = await getPhotoWallEnabled()
+    if (!enabled) return res.json({ enabled: false, photos: [] })
 
     const userId = req.user.studentId || req.user.username
     const isAdmin = req.user.role === 'admin'
@@ -67,6 +97,7 @@ router.get('/', authMiddleware, async (req, res) => {
     const result = await pool.query(query, params)
     res.json({ enabled: true, photos: result.rows })
   } catch (e) {
+    console.error('获取照片列表失败:', e)
     res.status(500).json({ message: '获取失败' })
   }
 })
@@ -83,7 +114,15 @@ router.get('/download/:id', authMiddleware, async (req, res) => {
     const photo = result.rows[0]
     const fileBuffer = Buffer.isBuffer(photo.file_data) ? photo.file_data : Buffer.from(photo.file_data)
     const fileType = photo.file_type || 'image/png'
-    const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+
+    // 超过 2MB 的文件禁止直接下载，前端应使用分片下载
+    if (fileBuffer.length > 2 * 1024 * 1024) {
+      return res.status(413).json({
+        message: '文件过大，请使用分片下载',
+        fileSize: fileBuffer.length,
+        useChunked: true
+      })
+    }
 
     res.json({
       base64: fileBuffer.toString('base64'),
@@ -91,6 +130,7 @@ router.get('/download/:id', authMiddleware, async (req, res) => {
       fileSize: photo.file_size
     })
   } catch (e) {
+    console.error('下载照片失败:', e)
     res.status(500).json({ message: '下载失败' })
   }
 })
@@ -119,6 +159,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     await pool.query('DELETE FROM photo_wall WHERE id = $1', [req.params.id])
     res.json({ message: '删除成功' })
   } catch (e) {
+    console.error('删除照片失败:', e)
     res.status(500).json({ message: '删除失败' })
   }
 })
@@ -134,6 +175,7 @@ router.put('/:id/privacy', authMiddleware, async (req, res) => {
     await pool.query('UPDATE photo_wall SET is_public = $1 WHERE id = $2', [req.body.is_public, req.params.id])
     res.json({ message: '设置成功' })
   } catch (e) {
+    console.error('修改照片隐私失败:', e)
     res.status(500).json({ message: '设置失败' })
   }
 })

@@ -315,7 +315,7 @@ const handleMajorChange = () => {
 
 const submitEdit = async () => {
   if (!editFormRef.value) return
-  await editFormRef.value.validate()
+  try { await editFormRef.value.validate() } catch { return }
   editLoading.value = true
   try {
     await updateStudent(editForm.value.id, {

@@ -4,11 +4,18 @@ import bcrypt from 'bcryptjs'
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js'
 import xlsx from 'xlsx'
 import multer from 'multer'
+import crypto from 'crypto'
 
 const router = Router()
 router.use(authMiddleware) // 所有路由都需要登录，管理路由单独加 adminMiddleware
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
+const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: isServerless ? 6 * 1024 * 1024 : 50 * 1024 * 1024 } })
+
+// 生成安全的随机密码
+function generateRandomPassword(len = 8) {
+  return crypto.randomBytes(len).toString('hex').slice(0, len)
+}
 
 // ====== 学生端接口（只需登录） ======
 
@@ -143,7 +150,7 @@ router.delete('/:id', adminMiddleware, async (req, res) => {
 router.post('/:id/reset-password', adminMiddleware, async (req, res) => {
   try {
     const { newPassword } = req.body
-    const password = newPassword || Math.random().toString(36).slice(-8)
+    const password = newPassword || generateRandomPassword()
     const hashed = await bcrypt.hash(password, 10)
     const result = await pool.query(
       'UPDATE students SET password_hash=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2 RETURNING *',
@@ -163,7 +170,7 @@ router.post('/batch-reset-password', adminMiddleware, async (req, res) => {
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: '请提供学生ID列表' })
     const results = []
     for (const id of ids) {
-      const newPassword = Math.random().toString(36).slice(-8)
+      const newPassword = generateRandomPassword()
       const hashed = await bcrypt.hash(newPassword, 10)
       const result = await pool.query(
         'UPDATE students SET password_hash=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2 RETURNING id, student_id, name',

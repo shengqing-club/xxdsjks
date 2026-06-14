@@ -29,21 +29,25 @@ router.get('/', async (req, res) => {
   }
 })
 
-// 发送聊天消息（替代 Socket.IO）
+// 发送聊天消息（从 token 中获取用户信息，防止冒充）
 router.post('/send', async (req, res) => {
   try {
-    const { senderId, senderName, role, content } = req.body
+    const { content } = req.body
     if (!content || !content.trim()) {
       return res.status(400).json({ message: '消息不能为空' })
     }
+    const senderId = req.user.studentId || req.user.username || ''
+    const senderName = req.user.name || req.user.username || '匿名用户'
+    const role = req.user.role || 'student'
     const result = await pool.query(
       `INSERT INTO chat_messages (sender_id, sender_name, sender_role, content)
        VALUES ($1,$2,$3,$4) RETURNING *`,
-      [senderId || '', senderName || '匿名用户', role || 'student', content.trim()]
+      [senderId, senderName, role, content.trim()]
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    res.status(500).json({ message: '发送失败: ' + e.message })
+    console.error('发送聊天消息失败:', e)
+    res.status(500).json({ message: '发送失败' })
   }
 })
 

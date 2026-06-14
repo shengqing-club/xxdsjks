@@ -138,6 +138,7 @@ import { getAllGrades, addGrade, updateGrade, deleteGrade } from '../../api/grad
 import { getStudents } from '../../api/student'
 import { getMajors } from '../../api/major'
 import { getCourses } from '../../api/course'
+import * as XLSX from 'xlsx'
 
 const loading = ref(false)
 const grades = ref([])
@@ -282,7 +283,7 @@ const handleEdit = (row) => {
 
 const submitForm = async () => {
   if (!formRef.value) return
-  await formRef.value.validate()
+  try { await formRef.value.validate() } catch { return }
   submitLoading.value = true
   try {
     const data = {
@@ -325,7 +326,6 @@ const handleDelete = async (row) => {
 // ========== 导出Excel ==========
 const handleExport = () => {
   try {
-    const XLSX = require('xlsx')
     const exportData = filteredGrades.value.map(g => ({
       '学号': g.student_id,
       '姓名': g.student_name,

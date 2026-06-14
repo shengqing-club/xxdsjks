@@ -176,7 +176,7 @@ const handleAdd = () => {
 
 const submitForm = async () => {
   if (!formRef.value) return
-  await formRef.value.validate()
+  try { await formRef.value.validate() } catch { return }
   submitLoading.value = true
   try {
     await addReward(form.value)

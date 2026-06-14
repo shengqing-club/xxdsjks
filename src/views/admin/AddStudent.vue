@@ -152,7 +152,7 @@ const fetchMajors = async () => {
 
 const handleSubmit = async () => {
   if (!formRef.value) return
-  await formRef.value.validate()
+  try { await formRef.value.validate() } catch { return }
   submitting.value = true
   try {
     await addStudent({

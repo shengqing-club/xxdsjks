@@ -6,10 +6,10 @@ export function getGroupFiles(group_id) {
   return api.get(`/group-files/${group_id}`)
 }
 
-// 上传文件到分组
-export function uploadGroupFile(group_id, formData) {
+// 上传文件到分组（不手动设置 Content-Type，让 axios 自动添加 boundary）
+export function uploadGroupSharedFile(group_id, formData) {
   return api.post(`/group-files/${group_id}/upload`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    timeout: 60000
   })
 }
 

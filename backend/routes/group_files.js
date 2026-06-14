@@ -8,7 +8,8 @@ import { decodeMultipartFilename } from '../utils/decodeFilename.js'
 const router = Router()
 router.use(authMiddleware)
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
+const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: isServerless ? 6 * 1024 * 1024 : 50 * 1024 * 1024 } })
 
 // 获取分组文件列表
 router.get('/:group_id', async (req, res) => {
@@ -97,6 +98,15 @@ router.get('/download/:file_id', async (req, res) => {
     }
 
     const fileBuffer = Buffer.isBuffer(file.file_data) ? file.file_data : Buffer.from(file.file_data)
+
+    // 超过 2MB 的文件禁止直接下载，前端应使用分片下载
+    if (fileBuffer.length > 2 * 1024 * 1024) {
+      return res.status(413).json({
+        message: '文件过大，请使用分片下载',
+        fileSize: fileBuffer.length,
+        useChunked: true
+      })
+    }
 
     res.json({
       base64: fileBuffer.toString('base64'),

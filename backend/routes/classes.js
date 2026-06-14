@@ -77,13 +77,17 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   }
 })
 
-// 管理员：删除班级
+// 管理员：删除班级（同时清除学生引用）
 router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM classes WHERE id=$1 RETURNING id', [req.params.id])
+    const result = await pool.query('DELETE FROM classes WHERE id=$1 RETURNING id, name', [req.params.id])
     if (result.rows.length === 0) return res.status(404).json({ message: '班级不存在' })
+    // 清除学生表中对该班级的引用
+    const className = result.rows[0].name
+    await pool.query('UPDATE students SET class_name = NULL WHERE class_name = $1', [className])
     res.json({ message: '删除成功' })
   } catch (e) {
+    console.error('删除班级失败:', e)
     res.status(500).json({ message: '删除失败' })
   }
 })

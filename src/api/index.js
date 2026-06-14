@@ -1,16 +1,18 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
+// 401 防抖：避免并发请求同时触发多次跳转和提示
+let isRedirecting = false
+
 const api = axios.create({
   baseURL: '/api',
-  timeout: 15000,
+  timeout: 30000,
 })
 
 // 请求拦截器：自动附加 token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) {
-    // 确保 Authorization 正确拼写，且去掉可能的引号
     config.headers['Authorization'] = `Bearer ${token.replace(/^["']|["']$/g, '')}`
   }
   return config
@@ -19,13 +21,6 @@ api.interceptors.request.use((config) => {
 // 响应拦截器：401 自动跳转登录，Token 自动刷新，统一错误处理
 api.interceptors.response.use(
   (res) => {
-    // 如果响应本身是 401，也跳转
-    if (res.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
-      return Promise.reject(new Error('未登录或Token已过期'))
-    }
     // Token 自动刷新：后端在 token 即将过期时返回新 token
     const newToken = res.headers['x-refresh-token']
     if (newToken) {
@@ -35,10 +30,13 @@ api.interceptors.response.use(
   },
   (err) => {
     if (err.response?.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+      if (!isRedirecting) {
+        isRedirecting = true
+        ElMessage.error('登录已过期，请重新登录')
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+      }
     } else if (err.code === 'ECONNABORTED') {
       ElMessage.error('请求超时，请检查网络')
     } else if (!err.response) {
