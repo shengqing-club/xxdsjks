@@ -6,7 +6,7 @@
   NODE_VERSION = "22"
 
 [functions]
-  node_bundler = "nft"
+  node_bundler = "esbuild"
   included_files = ["backend/**"]
 
 [[redirects]]
