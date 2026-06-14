@@ -1,4 +1,3 @@
-import 'dotenv/config'
 import pkg from 'pg'
 const { Pool, types } = pkg
 
@@ -33,6 +32,7 @@ pool.on('connect', async (client) => {
 
 // 初始化：创建 bytea_agg 聚合函数（用于分片上传合并）
 async function initByteaAgg() {
+  if (!connectionString) return
   try {
     await pool.query(`
       CREATE OR REPLACE AGGREGATE bytea_agg(bytea) (
@@ -63,7 +63,7 @@ async function initByteaAgg() {
     }
   }
 }
-initByteaAgg()
+initByteaAgg().catch(() => {})
 
 pool.on('error', (err) => {
   console.error('数据库连接池异常:', err.message)
