@@ -1,5 +1,5 @@
 [build]
-  command = "cd backend && npm install && cd .. && npm install && npm run build"
+  command = "cd backend && npm install && cd .. && npm install && npx vite build"
   publish = "dist"
 
 [build.environment]
