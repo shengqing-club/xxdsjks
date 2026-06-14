@@ -12,7 +12,6 @@ router.get('/active', authMiddleware, async (req, res) => {
     )
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取公告失败' })
   }
 })
@@ -23,7 +22,6 @@ router.get('/', authMiddleware, adminMiddleware, async (req, res) => {
     const result = await pool.query('SELECT * FROM announcements ORDER BY created_at DESC')
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取公告失败' })
   }
 })
@@ -50,7 +48,6 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
     } catch {}
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '发布失败' })
   }
 })
@@ -67,7 +64,6 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '公告不存在' })
     res.json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '更新失败' })
   }
 })

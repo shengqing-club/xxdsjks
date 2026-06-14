@@ -21,7 +21,6 @@ router.post('/', adminMiddleware, async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '创建分组失败' })
   }
 })
@@ -44,7 +43,6 @@ router.get('/', async (req, res) => {
     const result = await pool.query(sql, params)
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取分组列表失败' })
   }
 })
@@ -81,7 +79,6 @@ router.get('/:id', async (req, res) => {
       stats: statsResult.rows[0]
     })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取分组详情失败' })
   }
 })
@@ -111,7 +108,6 @@ router.put('/:id', async (req, res) => {
     )
     res.json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '更新分组失败' })
   }
 })
@@ -143,7 +139,6 @@ router.delete('/:id', adminMiddleware, async (req, res) => {
     res.json({ message: '分组已解散，相关数据已清理' })
   } catch (e) {
     await client.query('ROLLBACK')
-    console.error(e)
     res.status(500).json({ message: '解散分组失败' })
   } finally {
     client.release()
@@ -203,7 +198,6 @@ router.post('/:id/members', async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '添加成员失败' })
   }
 })
@@ -236,7 +230,6 @@ router.delete('/:id/members/:student_id', async (req, res) => {
     )
     res.json({ message: '移除成功' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '移除成员失败' })
   }
 })
@@ -273,7 +266,6 @@ router.post('/:id/leader/:student_id', adminMiddleware, async (req, res) => {
     res.json(result.rows[0])
   } catch (e) {
     await client.query('ROLLBACK')
-    console.error(e)
     res.status(500).json({ message: '任命组长失败' })
   } finally {
     client.release()
@@ -293,7 +285,6 @@ router.get('/student/:student_id', async (req, res) => {
     )
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取学生分组失败' })
   }
 })
@@ -316,7 +307,6 @@ router.get('/stats/overview', adminMiddleware, async (req, res) => {
     `)
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取统计失败' })
   }
 })

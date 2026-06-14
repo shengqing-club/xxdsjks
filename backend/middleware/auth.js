@@ -1,6 +1,10 @@
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'student-mgmt-secret-key-2024'
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET environment variable is not set')
+  process.exit(1)
+}
 
 export function signToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' })

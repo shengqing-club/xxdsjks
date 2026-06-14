@@ -3,6 +3,7 @@ import multer from 'multer'
 import pool from '../db.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
+import { decodeMultipartFilename } from '../utils/decodeFilename.js'
 
 const router = Router()
 router.use(authMiddleware)
@@ -20,7 +21,7 @@ router.get('/:group_id', async (req, res) => {
       'SELECT 1 FROM group_members WHERE group_id = $1 AND student_id = $2',
       [groupId, userId]
     )
-    if (memberCheck.rows.length === 0 && req.user.username !== 'admin') {
+    if (memberCheck.rows.length === 0 && req.user.role !== 'admin') {
       return res.status(403).json({ message: '无权访问此文件库' })
     }
 
@@ -32,7 +33,6 @@ router.get('/:group_id', async (req, res) => {
     )
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取文件列表失败' })
   }
 })
@@ -56,14 +56,11 @@ router.post('/:group_id/upload', upload.single('file'), async (req, res) => {
       'SELECT 1 FROM group_members WHERE group_id = $1 AND student_id = $2',
       [groupId, userId]
     )
-    if (memberCheck.rows.length === 0 && req.user.username !== 'admin') {
+    if (memberCheck.rows.length === 0 && req.user.role !== 'admin') {
       return res.status(403).json({ message: '无权上传文件' })
     }
 
-    let originalName = req.file.originalname
-    try {
-      originalName = Buffer.from(originalName, 'latin1').toString('utf8')
-    } catch {}
+    const originalName = decodeMultipartFilename(req.file.originalname)
 
     const result = await pool.query(
       `INSERT INTO group_files
@@ -82,7 +79,6 @@ router.post('/:group_id/upload', upload.single('file'), async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '上传失败' })
   }
 })
@@ -102,24 +98,13 @@ router.get('/download/:file_id', async (req, res) => {
 
     const fileBuffer = Buffer.isBuffer(file.file_data) ? file.file_data : Buffer.from(file.file_data)
 
-    res.setHeader('Content-Type', file.file_type || 'application/octet-stream')
-    const encodedName = encodeURIComponent(file.original_name || 'download').replace(/['()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-    res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
-    res.setHeader('Content-Length', fileBuffer.length)
-
-    const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
-    if (isServerless) {
-      res.json({
-        base64: fileBuffer.toString('base64'),
-        fileName: file.original_name || 'download',
-        fileType: file.file_type || 'application/octet-stream',
-        fileSize: fileBuffer.length
-      })
-    } else {
-      res.end(fileBuffer)
-    }
+    res.json({
+      base64: fileBuffer.toString('base64'),
+      fileName: file.original_name || 'download',
+      fileType: file.file_type || 'application/octet-stream',
+      fileSize: fileBuffer.length
+    })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '下载失败' })
   }
 })
@@ -160,7 +145,6 @@ router.delete('/:file_id', async (req, res) => {
     await pool.query('DELETE FROM group_files WHERE id = $1', [fileId])
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '删除失败' })
   }
 })

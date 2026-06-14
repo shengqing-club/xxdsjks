@@ -1,6 +1,5 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuth } from '../../stores/auth'
 import { getStudentByStudentId } from '../../api/student'
 import { getGradesByStudent } from '../../api/grade'
@@ -220,7 +219,7 @@ const handleDeleteMaterial = async (material) => {
 // ============ 下载复习资料 ============
 const handleDownload = async (material) => {
   try {
-    await downloadStudyMaterial(material.id, material.file_name || material.title)
+    await downloadStudyMaterial(material.id, material.file_name || material.title, material.file_size, material.file_type)
     ElMessage.success('下载完成')
   } catch (e) {
     ElMessage.error('下载失败：' + (e.message || '网络错误'))
@@ -355,8 +354,8 @@ onMounted(async () => {
     // 8. 滚动字幕设置
     await fetchScrollingText()
 
-    // 9. 全屏文字设置
-    await fetchFullscreenText()
+    // 9. 全屏文字设置（功能暂未实现，待后续添加 fetchFullscreenText）
+    // await fetchFullscreenText()
 
   } catch (e) {
     console.error('[Dashboard] 学生信息获取失败', e)

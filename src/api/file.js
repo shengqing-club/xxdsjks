@@ -29,7 +29,7 @@ export async function uploadFileChunked(file, options = {}, onProgress) {
     totalChunks,
     category: category || 'general',
     uploaderRole, uploaderId, uploaderName
-  })
+  }, { timeout: 120000 })
   const { uploadId } = initRes.data
 
   for (let i = 0; i < totalChunks; i++) {
@@ -42,7 +42,7 @@ export async function uploadFileChunked(file, options = {}, onProgress) {
     if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100))
   }
 
-  const completeRes = await api.post(`/files/upload/chunked/${uploadId}/complete`)
+  const completeRes = await api.post(`/files/upload/chunked/${uploadId}/complete`, null, { timeout: 120000 })
   return completeRes.data
 }
 

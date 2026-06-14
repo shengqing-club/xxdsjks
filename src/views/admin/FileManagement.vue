@@ -316,7 +316,7 @@ const submitUpload = async () => {
 
 const handleDownload = async (row) => {
   try {
-    await downloadFile(row.id, row.original_name)
+    await downloadFile(row.id, row.original_name, row.file_size, row.file_type)
   } catch (e) {
     ElMessage.error('下载失败')
   }

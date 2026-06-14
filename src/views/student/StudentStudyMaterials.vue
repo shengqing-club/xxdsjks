@@ -238,7 +238,7 @@ const loadCourses = async () => {
 
 const handleDownload = async (row) => {
   try {
-    await downloadStudyMaterial(row.id, row.original_name || row.file_name || row.title)
+    await downloadStudyMaterial(row.id, row.original_name || row.file_name || row.title, row.file_size, row.file_type)
   } catch (err) {
     console.error('下载失败:', err)
     ElMessage.error('下载失败')

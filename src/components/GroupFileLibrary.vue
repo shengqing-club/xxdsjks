@@ -129,7 +129,7 @@ const handleUpload = async (file) => {
 
 const handleDownload = async (row) => {
   try {
-    await downloadGroupFile(row.id, row.original_name)
+    await downloadGroupFile(row.id, row.original_name, row.file_size, row.file_type)
   } catch (err) {
     ElMessage.error('下载失败')
   }

@@ -24,7 +24,16 @@ import forumRoutes from './routes/forum.js'
 
 const app = express()
 
-app.use(cors())
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [process.env.FRONTEND_URL || 'https://xxdshijianks.netlify.app']
+  : ['http://localhost:8080', 'http://localhost:5173']
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+    callback(new Error('Not allowed by CORS'))
+  },
+  credentials: true
+}))
 
 // API 限流：每 IP 每分钟最多 100 次请求，上传接口单独限制
 const generalLimiter = rateLimit({
@@ -44,8 +53,8 @@ const uploadLimiter = rateLimit({
 app.use('/api/', generalLimiter)
 app.use('/api/files/upload', uploadLimiter)
 app.use('/api/study-materials/upload', uploadLimiter)
-app.use('/api/group-chat', uploadLimiter)
-app.use('/api/group-files', uploadLimiter)
+app.use('/api/group-chat/upload', uploadLimiter)
+app.use('/api/group-files/upload', uploadLimiter)
 // 对 multipart/form-data 请求跳过 json/urlencoded 解析，避免文件上传报错
 const skipMultipart = (req, res, next) => {
   if (req.headers['content-type']?.includes('multipart/form-data')) {

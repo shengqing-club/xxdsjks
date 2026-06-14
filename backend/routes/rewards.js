@@ -21,7 +21,6 @@ router.get('/', async (req, res) => {
     const result = await pool.query(sql, params)
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取奖惩记录失败' })
   }
 })
@@ -37,7 +36,6 @@ router.post('/', adminMiddleware, async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '添加失败' })
   }
 })
@@ -48,7 +46,6 @@ router.delete('/:id', adminMiddleware, async (req, res) => {
     await pool.query('DELETE FROM rewards_punishments WHERE id = $1', [req.params.id])
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '删除失败' })
   }
 })

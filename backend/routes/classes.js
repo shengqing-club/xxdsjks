@@ -24,7 +24,6 @@ router.get('/', authMiddleware, async (req, res) => {
     const result = await pool.query(sql, params)
     res.json(result.rows)
   } catch (e) {
-    console.error('获取班级列表失败:', e)
     res.status(500).json({ message: '获取班级列表失败' })
   }
 })
@@ -44,7 +43,6 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
     res.status(201).json(result.rows[0])
   } catch (e) {
     if (e.code === '23505') return res.status(400).json({ message: '班级名称已存在' })
-    console.error('添加班级失败:', e)
     res.status(500).json({ message: '添加失败' })
   }
 })
@@ -73,7 +71,6 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {})
     if (e.code === '23505') return res.status(400).json({ message: '班级名称已存在' })
-    console.error('更新班级失败:', e)
     res.status(500).json({ message: '更新失败' })
   } finally {
     client.release()
@@ -87,7 +84,6 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '班级不存在' })
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error('删除班级失败:', e)
     res.status(500).json({ message: '删除失败' })
   }
 })

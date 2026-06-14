@@ -27,11 +27,19 @@ router.get('/posts', async (req, res) => {
     }
 
     const countResult = await pool.query(`SELECT COUNT(*) as total FROM forum_posts p ${whereSql}`, params)
+
+    // is_liked 参数化（防止SQL注入）
+    const userId = req.user.studentId || req.user.username
+    const isLikedSql = userId
+      ? `(SELECT COUNT(*) FROM forum_likes WHERE post_id = p.id AND user_id = $${paramIdx++}) as is_liked`
+      : '0 as is_liked'
+    if (userId) params.push(userId)
+
     const result = await pool.query(
       `SELECT p.*,
               (SELECT COUNT(*) FROM forum_likes WHERE post_id = p.id) as like_count,
               (SELECT COUNT(*) FROM forum_comments WHERE post_id = p.id) as comment_count,
-              ${req.user.studentId || req.user.username ? `(SELECT COUNT(*) FROM forum_likes WHERE post_id = p.id AND user_id = '${req.user.studentId || req.user.username}') as is_liked` : '0 as is_liked'}
+              ${isLikedSql}
        FROM forum_posts p ${whereSql}
        ORDER BY p.pinned DESC, p.created_at DESC
        LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
@@ -39,7 +47,6 @@ router.get('/posts', async (req, res) => {
     )
     res.json({ list: result.rows, total: parseInt(countResult.rows[0].total), page: parseInt(page), pageSize: parseInt(pageSize) })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取帖子列表失败' })
   }
 })
@@ -59,7 +66,6 @@ router.get('/posts/:id', async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '帖子不存在' })
     res.json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取帖子详情失败' })
   }
 })
@@ -80,7 +86,6 @@ router.post('/posts', async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '发帖失败' })
   }
 })
@@ -99,7 +104,6 @@ router.delete('/posts/:id', async (req, res) => {
     await pool.query('DELETE FROM forum_posts WHERE id = $1', [req.params.id])
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '删除失败' })
   }
 })
@@ -112,7 +116,6 @@ router.put('/posts/:id/pin', adminMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '帖子不存在' })
     res.json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '操作失败' })
   }
 })
@@ -128,7 +131,6 @@ router.get('/posts/:id/comments', async (req, res) => {
     )
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取评论失败' })
   }
 })
@@ -148,7 +150,6 @@ router.post('/posts/:id/comments', async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '评论失败' })
   }
 })
@@ -165,7 +166,6 @@ router.delete('/comments/:id', async (req, res) => {
     await pool.query('DELETE FROM forum_comments WHERE id = $1', [req.params.id])
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '删除失败' })
   }
 })
@@ -191,7 +191,6 @@ router.post('/posts/:id/like', async (req, res) => {
       res.json({ liked: true })
     }
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '操作失败' })
   }
 })
@@ -205,7 +204,6 @@ router.get('/posts/:id/likes', async (req, res) => {
     )
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取点赞列表失败' })
   }
 })

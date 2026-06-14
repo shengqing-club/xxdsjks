@@ -69,7 +69,7 @@ export async function uploadStudyMaterialChunked(file, options = {}, onProgress)
     title: title || file.name,
     course_name: course_name || '',
     class_name: class_name || ''
-  })
+  }, { timeout: 120000 })
   const { uploadId } = initRes.data
 
   // 2. 逐片上传
@@ -91,7 +91,7 @@ export async function uploadStudyMaterialChunked(file, options = {}, onProgress)
   }
 
   // 3. 完成合并
-  const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`)
+  const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`, null, { timeout: 120000 })
   return completeRes.data
 }
 
@@ -130,7 +130,7 @@ export async function uploadStudyMaterialNewVersion(file, versionGroup, options 
     course_name: course_name || '',
     class_name: class_name || '',
     version_group: versionGroup
-  })
+  }, { timeout: 120000 })
   const { uploadId } = initRes.data
 
   for (let i = 0; i < totalChunks; i++) {
@@ -143,6 +143,8 @@ export async function uploadStudyMaterialNewVersion(file, versionGroup, options 
     if (onProgress) onProgress(Math.round(((i + 1) / totalChunks) * 100))
   }
 
-  const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`)
+ const completeRes = await api.post(`/study-materials/upload/chunked/${uploadId}/complete`, null, { timeout: 120000 })
   return completeRes.data
 }
+
+// 删除复习资料

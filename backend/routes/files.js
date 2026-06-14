@@ -1,8 +1,9 @@
 import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db.js'
-import { authMiddleware } from '../middleware/auth.js'
+import { authMiddleware, adminMiddleware } from '../middleware/auth.js'
 import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
+import { decodeMultipartFilename } from '../utils/decodeFilename.js'
 
 const router = Router()
 router.use(authMiddleware)
@@ -24,7 +25,7 @@ const ensureFileDataColumn = async () => {
       console.log('已添加 files.file_data 列')
     }
   } catch (e) {
-    console.error('添加 file_data 列失败:', e.message)
+    // 忽略列已存在等错误
   }
 }
 ensureFileDataColumn()
@@ -32,10 +33,10 @@ ensureFileDataColumn()
 // ========== 设置路由（必须在 /:id 路由之前，避免被参数匹配拦截） ==========
 
 let studentUploadEnabled = true
-router.get('/setting/student-upload', (req, res) => {
+router.get('/setting/student-upload', authMiddleware, async (req, res) => {
   res.json({ enabled: studentUploadEnabled })
 })
-router.post('/setting/student-upload', (req, res) => {
+router.post('/setting/student-upload', adminMiddleware, (req, res) => {
   studentUploadEnabled = req.body.enabled
   res.json({ enabled: studentUploadEnabled })
 })
@@ -43,10 +44,10 @@ router.post('/setting/student-upload', (req, res) => {
 const DANGEROUS_EXTENSIONS = ['exe', 'dll', 'bat', 'cmd', 'sh', 'msi', 'scr', 'vbs', 'js', 'jar', 'apk', 'ipa']
 let dangerousFileBlockEnabled = true
 
-router.get('/setting/dangerous-file-block', (req, res) => {
+router.get('/setting/dangerous-file-block', authMiddleware, async (req, res) => {
   res.json({ enabled: dangerousFileBlockEnabled, extensions: DANGEROUS_EXTENSIONS })
 })
-router.post('/setting/dangerous-file-block', (req, res) => {
+router.post('/setting/dangerous-file-block', authMiddleware, (req, res) => {
   dangerousFileBlockEnabled = req.body.enabled
   res.json({ enabled: dangerousFileBlockEnabled, extensions: DANGEROUS_EXTENSIONS })
 })
@@ -70,7 +71,6 @@ router.get('/', async (req, res) => {
     const result = await pool.query(sql, params)
     res.json(result.rows)
   } catch (e) {
-    console.error('获取文件列表失败:', e)
     res.status(500).json({ message: '获取文件列表失败' })
   }
 })
@@ -108,12 +108,11 @@ router.post('/upload/chunked/init', async (req, res) => {
 
     res.json({ uploadId, chunkSize: 4 * 1024 * 1024 })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '初始化失败' })
   }
 })
 
-// 完成分片上传
+// 完成分片上传（使用数据库聚合拼接，避免内存中 Buffer.concat）
 router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
   try {
     const { uploadId } = req.params
@@ -126,17 +125,21 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
       return res.status(400).json({ message: `分片不完整：${s.received_chunks}/${s.total_chunks}` })
     }
 
-    const chunks = await pool.query(
-      'SELECT chunk_index, chunk_data FROM upload_chunks WHERE upload_id = $1 ORDER BY chunk_index', [uploadId]
+    // 使用 PostgreSQL bytea 聚合拼接，避免内存中合并大 Buffer
+    const mergeRes = await pool.query(
+      `SELECT bytea_agg(chunk_data ORDER BY chunk_index) AS merged_data
+       FROM upload_chunks WHERE upload_id = $1`,
+      [uploadId]
     )
+    const mergedData = mergeRes.rows[0]?.merged_data
+    if (!mergedData) return res.status(500).json({ message: '合并数据失败' })
 
-    const totalBuffer = Buffer.concat(chunks.rows.map(c => c.chunk_data))
     const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9)
 
     const result = await pool.query(
       `INSERT INTO files (filename, original_name, file_size, file_type, category, uploader_role, uploader_id, uploader_name, file_data)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, filename, original_name, file_size, file_type, category, uploader_role, uploader_id, uploader_name, created_at`,
-      [uniqueName, s.file_name, s.file_size, s.file_type, s.category || 'general', s.uploader_role, s.uploader_id, s.uploader_name, totalBuffer]
+      [uniqueName, s.file_name, s.file_size, s.file_type, s.category || 'general', s.uploader_role, s.uploader_id, s.uploader_name, mergedData]
     )
 
     await pool.query('DELETE FROM upload_chunks WHERE upload_id = $1', [uploadId])
@@ -144,7 +147,6 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
 
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '合并失败: ' + e.message })
   }
 })
@@ -170,7 +172,6 @@ router.post('/upload/chunked/:uploadId/:chunkIndex', upload.single('chunk'), asy
 
     res.json({ chunkIndex: parseInt(chunkIndex) })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '分片上传失败' })
   }
 })
@@ -185,7 +186,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     let originalName = originalFilename
     if (!originalName || typeof originalName !== 'string' || !originalName.trim()) {
-      originalName = Buffer.from(file.originalname, 'latin1').toString('utf8')
+      originalName = decodeMultipartFilename(file.originalname)
     }
     originalName = originalName.trim()
 
@@ -202,7 +203,6 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error('上传失败:', e)
     res.status(500).json({ message: '上传失败: ' + e.message })
   }
 })
@@ -238,24 +238,13 @@ router.get('/:id/download', async (req, res) => {
       contentType = mimeMap[ext] || 'application/octet-stream'
     }
 
-    const encodedName = encodeURIComponent(file.original_name || 'download').replace(/['()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-
-    const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
-    if (isServerless) {
-      res.json({
-        base64: fileBuffer.toString('base64'),
-        fileName: file.original_name || 'download',
-        fileType: contentType,
-        fileSize: fileBuffer.length
-      })
-    } else {
-      res.setHeader('Content-Type', contentType)
-      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedName}`)
-      res.setHeader('Content-Length', fileBuffer.length)
-      res.end(fileBuffer)
-    }
+    res.json({
+      base64: fileBuffer.toString('base64'),
+      fileName: file.original_name || 'download',
+      fileType: contentType,
+      fileSize: fileBuffer.length
+    })
   } catch (e) {
-    console.error('下载失败:', e)
     res.status(500).json({ message: '下载失败' })
   }
 })
@@ -276,7 +265,6 @@ router.delete('/:id', async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '文件不存在' })
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error('删除失败:', e)
     res.status(500).json({ message: '删除失败' })
   }
 })

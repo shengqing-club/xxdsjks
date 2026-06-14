@@ -16,7 +16,6 @@ router.get('/', authMiddleware, async (req, res) => {
     `)
     res.json(result.rows)
   } catch (e) {
-    console.error('获取专业列表失败:', e)
     res.status(500).json({ message: '获取专业列表失败' })
   }
 })
@@ -24,10 +23,10 @@ router.get('/', authMiddleware, async (req, res) => {
 // 管理员：新增专业
 router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { name, code, description, class_names } = req.body
+    const { name, code, description } = req.body
     const result = await pool.query(
-      `INSERT INTO majors (name, code, description, class_names) VALUES ($1,$2,$3,$4) RETURNING *`,
-      [name, code, description || '', class_names || '']
+      `INSERT INTO majors (name, code, description) VALUES ($1,$2,$3) RETURNING *`,
+      [name, code, description || '']
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
@@ -40,7 +39,7 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
 router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
   const client = await pool.connect()
   try {
-    const { name, code, description, class_names } = req.body
+    const { name, code, description } = req.body
     // 先查旧名称
     const oldRes = await client.query('SELECT name FROM majors WHERE id=$1', [req.params.id])
     if (oldRes.rows.length === 0) return res.status(404).json({ message: '专业不存在' })
@@ -48,8 +47,8 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
 
     await client.query('BEGIN')
     const result = await client.query(
-      `UPDATE majors SET name=$1, code=$2, description=$3, class_names=$4 WHERE id=$5 RETURNING *`,
-      [name, code, description || '', class_names || '', req.params.id]
+      `UPDATE majors SET name=$1, code=$2, description=$3 WHERE id=$4 RETURNING *`,
+      [name, code, description || '', req.params.id]
     )
     // 如果专业名称变更，同步更新 students.major
     if (oldName !== name) {
@@ -59,7 +58,6 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
     res.json(result.rows[0])
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {})
-    console.error('更新专业失败:', e)
     res.status(500).json({ message: '更新失败' })
   } finally {
     client.release()

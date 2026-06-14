@@ -115,7 +115,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, EditPen, Star, ChatLineSquare } from '@element-plus/icons-vue'
-import { getPosts, getPost, createPost, deletePost, toggleLike, getComments, createComment, deleteComment } from '../../api/forum'
+import { getPosts, getPost, createPost, deletePost, toggleLike as apiToggleLike, getComments, createComment, deleteComment } from '../../api/forum'
 
 const categories = ['全部', '综合', '学习', '生活', '技术', '求助']
 const currentCategory = ref('全部')
@@ -202,7 +202,7 @@ async function submitPost() {
 
 async function toggleLike(post) {
   try {
-    const res = await toggleLike(post.id)
+    const res = await apiToggleLike(post.id)
     if (res.data.liked) {
       post.like_count = (post.like_count || 0) + 1
       post.is_liked = 1

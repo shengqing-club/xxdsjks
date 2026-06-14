@@ -158,7 +158,7 @@
             </div>
             <div class="version-info">{{ v.file_name }} · {{ formatFileSize(v.file_size) }}</div>
             <div class="version-actions">
-              <el-button type="primary" link size="small" @click="downloadStudyMaterial(v.id, v.file_name)">下载</el-button>
+              <el-button type="primary" link size="small" @click="downloadStudyMaterial(v.id, v.file_name, v.file_size, v.file_type)">下载</el-button>
             </div>
           </div>
         </el-timeline-item>
@@ -391,7 +391,7 @@ const confirmUpload = async () => {
 
 const handleDownload = async (row) => {
   try {
-    await downloadStudyMaterial(row.id, row.original_name || row.file_name || row.title)
+    await downloadStudyMaterial(row.id, row.original_name || row.file_name || row.title, row.file_size, row.file_type)
   } catch (err) {
     console.error('下载失败:', err)
     ElMessage.error('下载失败')

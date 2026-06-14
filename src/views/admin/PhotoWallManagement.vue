@@ -100,7 +100,7 @@ const loadData = async () => {
     photos.value = photoRes.data.photos || []
 
     for (const photo of photos.value) {
-      downloadPhoto(photo.id).then(url => {
+      downloadPhoto(photo.id, photo.file_size).then(url => {
         photoUrls.value[photo.id] = url
       }).catch(() => {})
     }

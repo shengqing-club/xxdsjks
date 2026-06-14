@@ -10,7 +10,6 @@ router.get('/', authMiddleware, async (req, res) => {
     const result = await pool.query('SELECT * FROM courses ORDER BY name')
     res.json(result.rows)
   } catch (e) {
-    console.error('获取课程列表失败:', e)
     res.status(500).json({ message: '获取课程列表失败' })
   }
 })
@@ -30,7 +29,6 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
     res.status(201).json(result.rows[0])
   } catch (e) {
     if (e.code === '23505') return res.status(400).json({ message: '课程名称或代码已存在' })
-    console.error('添加课程失败:', e)
     res.status(500).json({ message: '添加失败' })
   }
 })
@@ -46,7 +44,6 @@ router.put('/:id', authMiddleware, adminMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '课程不存在' })
     res.json(result.rows[0])
   } catch (e) {
-    console.error('更新课程失败:', e)
     res.status(500).json({ message: '更新失败' })
   }
 })
@@ -58,7 +55,6 @@ router.delete('/:id', authMiddleware, adminMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '课程不存在' })
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error('删除课程失败:', e)
     res.status(500).json({ message: '删除失败' })
   }
 })
@@ -71,7 +67,6 @@ router.post('/batch-delete', authMiddleware, adminMiddleware, async (req, res) =
     const result = await pool.query('DELETE FROM courses WHERE id = ANY($1)', [ids])
     res.json({ message: `成功删除 ${result.rowCount} 门课程` })
   } catch (e) {
-    console.error('批量删除课程失败:', e)
     res.status(500).json({ message: '批量删除失败' })
   }
 })

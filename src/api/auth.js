@@ -5,17 +5,15 @@ export function login(username, password) {
 }
 
 export function logout() {
-  return api.post('/auth/logout')
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
 }
 
 export function getMe() {
   return api.get('/auth/me')
 }
 
-export function changePassword(username, oldPassword, newPassword) {
-  return api.post('/auth/change-password', { username, oldPassword, newPassword })
+export function changePassword(data) {
+  return api.put('/auth/change-password', data)
 }
 
-export function resetPassword(username, newPassword) {
-  return api.post('/auth/reset-password', { username, newPassword })
-}

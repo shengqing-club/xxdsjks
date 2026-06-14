@@ -3,6 +3,7 @@ import multer from 'multer'
 import pool from '../db.js'
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js'
 import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
+import { decodeMultipartFilename } from '../utils/decodeFilename.js'
 
 const router = Router()
 router.use(authMiddleware)
@@ -56,12 +57,11 @@ router.post('/upload/chunked/init', async (req, res) => {
 
     res.json({ uploadId, chunkSize: 4 * 1024 * 1024 }) // 每片 4MB
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '初始化失败' })
   }
 })
 
-// 完成分片上传（合并所有分片）—— 必须在 :chunkIndex 路由之前
+// 完成分片上传（使用数据库聚合拼接，避免内存中 Buffer.concat）—— 必须在 :chunkIndex 路由之前
 router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
   try {
     const { uploadId } = req.params
@@ -74,13 +74,14 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
       return res.status(400).json({ message: `分片不完整：${s.received_chunks}/${s.total_chunks}` })
     }
 
-    // 读取所有分片并合并
-    const chunks = await pool.query(
-      'SELECT chunk_index, chunk_data FROM upload_chunks WHERE upload_id = $1 ORDER BY chunk_index',
+    // 使用 PostgreSQL bytea 聚合拼接，避免内存中合并大 Buffer
+    const mergeRes = await pool.query(
+      `SELECT bytea_agg(chunk_data ORDER BY chunk_index) AS merged_data
+       FROM upload_chunks WHERE upload_id = $1`,
       [uploadId]
     )
-
-    const totalBuffer = Buffer.concat(chunks.rows.map(c => c.chunk_data))
+    const mergedData = mergeRes.rows[0]?.merged_data
+    if (!mergedData) return res.status(500).json({ message: '合并数据失败' })
 
     // 生成版本组 ID（首次上传）
     const versionGroup = s.version_group || `vg-${Date.now()}-${Math.round(Math.random()*1e9)}`
@@ -105,7 +106,7 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
         (title, file_url, file_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, file_data, version_group, version_number, is_latest)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        RETURNING *`,
-      [s.title, `stored-in-db://${s.file_name}`, s.file_name, s.file_size, s.file_type, s.course_name, s.class_name, s.uploader_id, s.uploader_name, s.uploader_role, totalBuffer, versionGroup, versionNumber, true]
+      [s.title, `stored-in-db://${s.file_name}`, s.file_name, s.file_size, s.file_type, s.course_name, s.class_name, s.uploader_id, s.uploader_name, s.uploader_role, mergedData, versionGroup, versionNumber, true]
     )
 
     // 发通知
@@ -118,7 +119,7 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
             [st.student_id, `新复习资料: ${s.title}`, `课程「${s.course_name || '通用'}」上传了新的复习资料，请及时下载复习。`, 'material']
           )
         }
-      } catch (e) { console.error('通知发送失败:', e.message) }
+      } catch (e) { /* 忽略通知发送失败 */ }
     }
 
     // 清理临时数据
@@ -127,7 +128,6 @@ router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
 
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '合并失败: ' + e.message })
   }
 })
@@ -159,7 +159,6 @@ router.post('/upload/chunked/:uploadId/:chunkIndex', upload.single('chunk'), asy
 
     res.json({ chunkIndex: parseInt(chunkIndex) })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '分片上传失败' })
   }
 })
@@ -185,7 +184,7 @@ const ensureColumns = async () => {
       console.log('已添加版本管理列')
     }
   } catch (e) {
-    console.error('检查/添加列失败:', e.message)
+    // 忽略列已存在等错误
   }
 }
 ensureColumns()
@@ -225,7 +224,6 @@ router.get('/', async (req, res) => {
     const result = await pool.query(sql, queryParams)
     res.json({ list: result.rows, total })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取复习资料失败' })
   }
 })
@@ -235,9 +233,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: '请选择文件' })
 
-    // 修复 multer 中文文件名编码问题
-    let originalName = req.file.originalname
-    try { originalName = Buffer.from(originalName, 'latin1').toString('utf8') } catch {}
+    const originalName = decodeMultipartFilename(req.file.originalname)
 
     // 危险文件校验
     const ext = originalName.split('.').pop().toLowerCase()
@@ -245,8 +241,6 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     if (dangerousExts.includes(ext)) {
       return res.status(400).json({ message: `禁止上传危险文件类型：.${ext}` })
     }
-
-    console.log('[UPLOAD-DEBUG] file:', req.file.originalname, 'size:', req.file.size, 'buffer type:', typeof req.file.buffer, 'buffer length:', req.file.buffer?.length)
 
     const { title, course_name, class_name } = req.body
     if (!title) return res.status(400).json({ message: '请输入资料标题' })
@@ -274,7 +268,6 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         req.file.buffer
       ]
     )
-    console.log('[UPLOAD-DEBUG] inserted id:', result.rows[0].id, 'file_data length:', result.rows[0].file_data?.length)
 
     // 如果指定了班级，给该班所有学生发通知
     if (class_name) {
@@ -291,13 +284,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
           )
         }
       } catch (e) {
-        console.error('通知发送失败:', e.message)
+        // 忽略通知发送失败
       }
     }
 
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error('[UPLOAD-ERROR]', e)
     res.status(500).json({ message: '上传失败: ' + e.message })
   }
 })
@@ -318,26 +310,13 @@ router.get('/download/:id', async (req, res) => {
       ? material.file_data
       : Buffer.from(material.file_data)
 
-    // 判断是否为 serverless 环境（Netlify Functions）
-    const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
-    if (isServerless) {
-      // serverless 环境返回 base64，前端解码
-      res.json({
-        base64: fileBuffer.toString('base64'),
-        fileName: material.file_name || 'download',
-        fileType: material.file_type || 'application/octet-stream',
-        fileSize: fileBuffer.length
-      })
-    } else {
-      // 传统服务器直接返回二进制
-      res.setHeader('Content-Type', material.file_type || 'application/octet-stream')
-      const encodedName = encodeURIComponent(material.file_name || 'download').replace(/['()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-      res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
-      res.setHeader('Content-Length', fileBuffer.length)
-      res.end(fileBuffer)
-    }
+    res.json({
+      base64: fileBuffer.toString('base64'),
+      fileName: material.file_name || 'download',
+      fileType: material.file_type || 'application/octet-stream',
+      fileSize: fileBuffer.length
+    })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '下载失败' })
   }
 })
@@ -366,7 +345,6 @@ router.get('/:id/versions', async (req, res) => {
     )
     res.json({ versions: versions.rows })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取版本历史失败' })
   }
 })
@@ -388,7 +366,6 @@ router.delete('/:id', async (req, res) => {
     await pool.query('DELETE FROM study_materials WHERE id = $1', [req.params.id])
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '删除失败' })
   }
 })

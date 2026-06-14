@@ -3,6 +3,7 @@ import multer from 'multer'
 import pool from '../db.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { createChunkedDownloadHandler } from '../utils/chunkedDownload.js'
+import { decodeMultipartFilename } from '../utils/decodeFilename.js'
 
 const router = Router()
 router.use(authMiddleware)
@@ -36,7 +37,7 @@ router.get('/:group_id', async (req, res) => {
       'SELECT 1 FROM group_members WHERE group_id = $1 AND student_id = $2',
       [groupId, userId]
     )
-    if (memberCheck.rows.length === 0 && req.user.username !== 'admin') {
+    if (memberCheck.rows.length === 0 && req.user.role !== 'admin') {
       return res.status(403).json({ message: '无权访问此聊天频道' })
     }
 
@@ -55,7 +56,6 @@ router.get('/:group_id', async (req, res) => {
     const result = await pool.query(sql, params)
     res.json(result.rows.reverse())
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取消息失败' })
   }
 })
@@ -83,7 +83,7 @@ router.post('/:group_id/send', async (req, res) => {
       'SELECT 1 FROM group_members WHERE group_id = $1 AND student_id = $2',
       [groupId, userId]
     )
-    if (memberCheck.rows.length === 0 && req.user.username !== 'admin') {
+    if (memberCheck.rows.length === 0 && req.user.role !== 'admin') {
       return res.status(403).json({ message: '无权在此频道发送消息' })
     }
 
@@ -95,7 +95,6 @@ router.post('/:group_id/send', async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '发送消息失败' })
   }
 })
@@ -120,15 +119,11 @@ router.post('/:group_id/upload', upload.single('file'), async (req, res) => {
       'SELECT 1 FROM group_members WHERE group_id = $1 AND student_id = $2',
       [groupId, userId]
     )
-    if (memberCheck.rows.length === 0 && req.user.username !== 'admin') {
+    if (memberCheck.rows.length === 0 && req.user.role !== 'admin') {
       return res.status(403).json({ message: '无权在此频道上传文件' })
     }
 
-    // 修复中文文件名
-    let originalName = req.file.originalname
-    try {
-      originalName = Buffer.from(originalName, 'latin1').toString('utf8')
-    } catch {}
+    const originalName = decodeMultipartFilename(req.file.originalname)
 
     const isImage = req.file.mimetype.startsWith('image/')
     const messageType = isImage ? 'image' : 'file'
@@ -166,7 +161,6 @@ router.post('/:group_id/upload', upload.single('file'), async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '上传失败' })
   }
 })
@@ -190,24 +184,13 @@ router.get('/download/:message_id', async (req, res) => {
     const fileBuffer = Buffer.isBuffer(msg.file_data) ? msg.file_data : Buffer.from(msg.file_data)
     const fileType = msg.file_type || 'application/octet-stream'
 
-    res.setHeader('Content-Type', fileType)
-    const encodedName = encodeURIComponent(msg.file_name || 'download').replace(/['()]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
-    res.setHeader('Content-Disposition', `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
-    res.setHeader('Content-Length', fileBuffer.length)
-
-    const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
-    if (isServerless) {
-      res.json({
-        base64: fileBuffer.toString('base64'),
-        fileName: msg.file_name || 'download',
-        fileType: fileType,
-        fileSize: fileBuffer.length
-      })
-    } else {
-      res.end(fileBuffer)
-    }
+    res.json({
+      base64: fileBuffer.toString('base64'),
+      fileName: msg.file_name || 'download',
+      fileType: fileType,
+      fileSize: fileBuffer.length
+    })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '下载失败' })
   }
 })

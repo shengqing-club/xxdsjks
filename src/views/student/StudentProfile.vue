@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { User, UserFilled, School } from '@element-plus/icons-vue'
 import { useAuth } from '../../stores/auth'
 import { getStudentByStudentId } from '../../api/student'
 

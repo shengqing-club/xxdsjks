@@ -31,6 +31,40 @@ pool.on('connect', async (client) => {
   }
 })
 
+// 初始化：创建 bytea_agg 聚合函数（用于分片上传合并）
+async function initByteaAgg() {
+  try {
+    await pool.query(`
+      CREATE OR REPLACE AGGREGATE bytea_agg(bytea) (
+        SFUNC = bytea_concat,
+        STYPE = bytea,
+        INITCOND = ''
+      )
+    `)
+  } catch (e) {
+    // 函数可能已存在或缺少 bytea_concat，尝试创建
+    try {
+      await pool.query(`
+        CREATE OR REPLACE FUNCTION bytea_concat(a bytea, b bytea) RETURNS bytea AS $$
+        BEGIN
+          RETURN a || b;
+        END;
+        $$ LANGUAGE plpgsql IMMUTABLE;
+      `)
+      await pool.query(`
+        CREATE OR REPLACE AGGREGATE bytea_agg(bytea) (
+          SFUNC = bytea_concat,
+          STYPE = bytea,
+          INITCOND = ''
+        )
+      `)
+    } catch (e2) {
+      // ignore if already exists
+    }
+  }
+}
+initByteaAgg()
+
 pool.on('error', (err) => {
   console.error('数据库连接池异常:', err.message)
 })

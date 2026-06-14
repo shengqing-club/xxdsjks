@@ -25,7 +25,6 @@ router.get('/', async (req, res) => {
     const result = await pool.query(sql, params)
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取消息失败' })
   }
 })
@@ -44,7 +43,6 @@ router.post('/send', async (req, res) => {
     )
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error('发送消息失败:', e)
     res.status(500).json({ message: '发送失败: ' + e.message })
   }
 })
@@ -65,7 +63,7 @@ router.get('/online-count', async (req, res) => {
 // 获取通知（学生端）
 router.get('/notifications', async (req, res) => {
   try {
-    const { studentId } = req.query
+    const studentId = req.user.studentId
     if (!studentId) return res.json([])
     const result = await pool.query(
       'SELECT * FROM notifications WHERE receiver_id = $1 ORDER BY created_at DESC LIMIT 50',
@@ -73,25 +71,52 @@ router.get('/notifications', async (req, res) => {
     )
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取通知失败' })
   }
 })
 
-// 标记通知已读
-router.put('/notifications/:id/read', async (req, res) => {
+// 标记通知为已读
+router.post('/notifications/:id/read', async (req, res) => {
   try {
-    await pool.query('UPDATE notifications SET is_read = true WHERE id = $1', [req.params.id])
-    res.json({ message: '已读' })
+    const result = await pool.query(
+      'UPDATE notifications SET is_read = true WHERE id = $1 AND receiver_id = $2 RETURNING id',
+      [req.params.id, req.user.id]
+    )
+    if (result.rowCount === 0) return res.status(403).json({ message: '无权操作此通知' })
+    res.json({ message: '已标记为已读' })
   } catch (e) {
-    res.status(500).json({ message: '操作失败' })
+    res.status(500).json({ message: '标记失败' })
+  }
+})
+
+// 标记所有通知为已读
+router.post('/notifications/read-all', async (req, res) => {
+  try {
+    await pool.query('UPDATE notifications SET is_read = true WHERE receiver_id = $1', [req.user.studentId])
+    res.json({ message: '全部已读' })
+  } catch (e) {
+    res.status(500).json({ message: '标记失败' })
+  }
+})
+
+// 删除通知
+router.delete('/notifications/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM notifications WHERE id = $1 AND receiver_id = $2 RETURNING id',
+      [req.params.id, req.user.id]
+    )
+    if (result.rowCount === 0) return res.status(403).json({ message: '无权删除此通知' })
+    res.json({ message: '已删除' })
+  } catch (e) {
+    res.status(500).json({ message: '删除失败' })
   }
 })
 
 // 获取未读通知数
 router.get('/notifications/unread-count', async (req, res) => {
   try {
-    const { studentId } = req.query
+    const studentId = req.user.studentId
     if (!studentId) return res.json({ count: 0 })
     const result = await pool.query(
       'SELECT COUNT(*) as count FROM notifications WHERE receiver_id = $1 AND is_read = false',
@@ -104,7 +129,7 @@ router.get('/notifications/unread-count', async (req, res) => {
 })
 
 // 管理员：获取所有通知
-router.get('/notifications/all', async (req, res) => {
+router.get('/notifications/all', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM notifications ORDER BY created_at DESC LIMIT 200')
     res.json(result.rows)
@@ -114,7 +139,7 @@ router.get('/notifications/all', async (req, res) => {
 })
 
 // 管理员：发送通知
-router.post('/notifications', async (req, res) => {
+router.post('/notifications', adminMiddleware, async (req, res) => {
   try {
     const { receiverIds, title, content, type } = req.body
     if (!receiverIds || !receiverIds.length) {
@@ -147,7 +172,6 @@ router.delete('/clear', adminMiddleware, async (req, res) => {
     const result = await pool.query(sql, params)
     res.json({ message: `已清空聊天记录`, deleted: result.rowCount })
   } catch (e) {
-    console.error('清空聊天失败:', e)
     res.status(500).json({ message: '清空聊天失败: ' + e.message })
   }
 })
@@ -165,7 +189,6 @@ router.delete('/notifications/clear', adminMiddleware, async (req, res) => {
     const result = await pool.query(sql, params)
     res.json({ message: `已清空通知记录`, deleted: result.rowCount })
   } catch (e) {
-    console.error('清空通知失败:', e)
     res.status(500).json({ message: '清空通知失败: ' + e.message })
   }
 })

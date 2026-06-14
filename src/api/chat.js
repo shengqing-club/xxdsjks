@@ -21,7 +21,7 @@ export function getUnreadCount(studentId) {
 }
 
 export function markNotificationRead(id) {
-  return api.put(`/chat/notifications/${id}/read`)
+  return api.post(`/chat/notifications/${id}/read`)
 }
 
 export function sendNotifications(data) {

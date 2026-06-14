@@ -122,7 +122,7 @@ const loadPhotos = async () => {
     photos.value = res.data.photos || []
     // 加载图片 URL
     for (const photo of photos.value) {
-      downloadPhoto(photo.id).then(url => {
+      downloadPhoto(photo.id, photo.file_size).then(url => {
         photoUrls.value[photo.id] = url
       }).catch(() => {})
     }

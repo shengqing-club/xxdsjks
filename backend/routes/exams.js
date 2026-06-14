@@ -22,7 +22,6 @@ router.get('/upcoming', async (req, res) => {
     const result = await pool.query(sql, params)
     res.json(result.rows)
   } catch (e) {
-    console.error('获取考试日程失败:', e)
     res.status(500).json({ message: '获取考试日程失败' })
   }
 })
@@ -36,7 +35,6 @@ router.get('/class/:className', async (req, res) => {
     )
     res.json(result.rows)
   } catch (e) {
-    console.error('获取班级考试日程失败:', e)
     res.status(500).json({ message: '获取班级考试日程失败' })
   }
 })
@@ -64,7 +62,6 @@ router.get('/', adminMiddleware, async (req, res) => {
     const result = await pool.query(sql, params)
     res.json(result.rows)
   } catch (e) {
-    console.error('获取考试列表失败:', e)
     res.status(500).json({ message: '获取考试列表失败' })
   }
 })
@@ -89,7 +86,6 @@ router.post('/', adminMiddleware, async (req, res) => {
     }
     res.status(201).json({ message: `已为 ${classes.length} 个班级创建考试`, data: results })
   } catch (e) {
-    console.error('新增考试失败:', e)
     res.status(500).json({ message: '新增考试失败' })
   }
 })
@@ -119,7 +115,6 @@ router.put('/:id', adminMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '考试记录不存在' })
     res.json(result.rows[0])
   } catch (e) {
-    console.error('更新考试失败:', e)
     res.status(500).json({ message: '更新考试失败' })
   }
 })
@@ -131,7 +126,6 @@ router.delete('/:id', adminMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '考试记录不存在' })
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error('删除考试失败:', e)
     res.status(500).json({ message: '删除失败' })
   }
 })
@@ -144,7 +138,6 @@ router.post('/batch-delete', adminMiddleware, async (req, res) => {
     const result = await pool.query('DELETE FROM exams WHERE id = ANY($1)', [ids])
     res.json({ message: `成功删除 ${result.rowCount} 条考试安排` })
   } catch (e) {
-    console.error('批量删除考试失败:', e)
     res.status(500).json({ message: '批量删除失败' })
   }
 })

@@ -243,7 +243,7 @@ const previewImage = (msgId) => {
 
 const downloadFile = async (msg) => {
   try {
-    await downloadGroupChatFile(msg.id, msg.file_name)
+    await downloadGroupChatFile(msg.id, msg.file_name, msg.file_size, msg.file_type)
   } catch (err) {
     console.error('下载失败:', err)
     ElMessage.error('下载失败')

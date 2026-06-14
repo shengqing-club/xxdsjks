@@ -148,8 +148,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, List, Search, Edit, Delete, InfoFilled } from '@element-plus/icons-vue'
-import { getExams, addExam, updateExam, deleteExam, getExamClasses } from '../../api/exam'
-import api from '../../api/index'
+import { getExams, addExam, updateExam, deleteExam, getExamClasses, batchDeleteExams } from '../../api/exam'
 import { formatTimeRange, getExamStatus, isPast } from '../../utils/exam'
 
 const loading = ref(false)
@@ -270,7 +269,7 @@ const handleBatchDelete = async () => {
   try {
     await ElMessageBox.confirm(`确定删除选中的 ${selectedRows.value.length} 条考试安排吗？此操作不可恢复。`, '确认批量删除', { type: 'warning' })
     const ids = selectedRows.value.map(r => r.id)
-    await api.post('/exams/batch-delete', { ids })
+    await batchDeleteExams(ids)
     ElMessage.success(`成功删除 ${ids.length} 条考试安排`)
     selectedRows.value = []
     fetchData()

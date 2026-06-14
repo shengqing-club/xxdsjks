@@ -22,7 +22,6 @@ router.get('/scrolling-text', async (req, res) => {
       mode: modeRes.rows[0]?.value || 'normal'
     })
   } catch (e) {
-    console.error('获取字幕设置失败:', e)
     res.status(500).json({ message: '获取失败' })
   }
 })
@@ -45,7 +44,6 @@ router.get('/fullscreen-text', async (req, res) => {
       font: fontRes.rows[0]?.value || 'serif'
     })
   } catch (e) {
-    console.error('获取全屏文字设置失败:', e)
     res.status(500).json({ message: '获取失败' })
   }
 })
@@ -71,7 +69,6 @@ router.put('/scrolling-text', authMiddleware, adminMiddleware, async (req, res) 
     )
     res.json({ message: '更新成功' })
   } catch (e) {
-    console.error('更新字幕设置失败:', e)
     res.status(500).json({ message: '更新失败' })
   }
 })
@@ -97,7 +94,6 @@ router.put('/fullscreen-text', authMiddleware, adminMiddleware, async (req, res)
     )
     res.json({ message: '更新成功' })
   } catch (e) {
-    console.error('更新全屏文字设置失败:', e)
     res.status(500).json({ message: '更新失败' })
   }
 })

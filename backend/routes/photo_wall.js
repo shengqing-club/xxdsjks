@@ -41,7 +41,6 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
 
     res.status(201).json(result.rows[0])
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '上传失败: ' + e.message })
   }
 })
@@ -68,7 +67,6 @@ router.get('/', authMiddleware, async (req, res) => {
     const result = await pool.query(query, params)
     res.json({ enabled: true, photos: result.rows })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取失败' })
   }
 })
@@ -87,19 +85,12 @@ router.get('/download/:id', authMiddleware, async (req, res) => {
     const fileType = photo.file_type || 'image/png'
     const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
 
-    if (isServerless) {
-      res.json({
-        base64: fileBuffer.toString('base64'),
-        fileType: fileType,
-        fileSize: photo.file_size
-      })
-    } else {
-      res.setHeader('Content-Type', fileType)
-      res.setHeader('Content-Length', photo.file_size)
-      res.send(fileBuffer)
-    }
+    res.json({
+      base64: fileBuffer.toString('base64'),
+      fileType: fileType,
+      fileSize: photo.file_size
+    })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '下载失败' })
   }
 })
@@ -128,7 +119,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     await pool.query('DELETE FROM photo_wall WHERE id = $1', [req.params.id])
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '删除失败' })
   }
 })
@@ -144,7 +134,6 @@ router.put('/:id/privacy', authMiddleware, async (req, res) => {
     await pool.query('UPDATE photo_wall SET is_public = $1 WHERE id = $2', [req.body.is_public, req.params.id])
     res.json({ message: '设置成功' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '设置失败' })
   }
 })

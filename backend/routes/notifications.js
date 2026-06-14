@@ -17,7 +17,6 @@ router.get('/', authMiddleware, async (req, res) => {
     )
     res.json(result.rows)
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取通知失败' })
   }
 })
@@ -33,7 +32,6 @@ router.get('/unread-count', authMiddleware, async (req, res) => {
     )
     res.json({ count: parseInt(result.rows[0].c) })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '获取未读数量失败' })
   }
 })
@@ -51,7 +49,6 @@ router.put('/:id/read', authMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '通知不存在' })
     res.json({ message: '已标记已读' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '操作失败' })
   }
 })
@@ -67,7 +64,6 @@ router.put('/read-all', authMiddleware, async (req, res) => {
     )
     res.json({ message: '已全部标记已读' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '操作失败' })
   }
 })
@@ -85,7 +81,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '通知不存在' })
     res.json({ message: '删除成功' })
   } catch (e) {
-    console.error(e)
     res.status(500).json({ message: '删除失败' })
   }
 })

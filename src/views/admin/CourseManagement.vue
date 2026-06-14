@@ -62,7 +62,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, Edit } from '@element-plus/icons-vue'
-import api from '../../api/index'
+import { getCourses, addCourse, updateCourse, deleteCourse, batchDeleteCourses } from '../../api/course'
 
 const loading = ref(false)
 const courseList = ref([])
@@ -81,7 +81,7 @@ const rules = {
 const loadCourses = async () => {
   loading.value = true
   try {
-    const res = await api.get('/courses')
+    const res = await getCourses()
     courseList.value = res.data
   } catch (e) {
     ElMessage.error('获取课程列表失败')
@@ -105,10 +105,10 @@ const submitForm = async () => {
   submitting.value = true
   try {
     if (isEdit.value) {
-      await api.put(`/courses/${form.value.id}`, form.value)
+      await updateCourse(form.value.id, form.value)
       ElMessage.success('更新成功')
     } else {
-      await api.post('/courses', form.value)
+      await addCourse(form.value)
       ElMessage.success('添加成功')
     }
     dialogVisible.value = false
@@ -123,7 +123,7 @@ const submitForm = async () => {
 const handleDelete = async (row) => {
   try {
     await ElMessageBox.confirm(`确定删除课程「${row.name}」吗？`, '提示', { type: 'warning' })
-    await api.delete(`/courses/${row.id}`)
+    await deleteCourse(row.id)
     ElMessage.success('删除成功')
     loadCourses()
   } catch (e) {
@@ -135,7 +135,7 @@ const handleBatchDelete = async () => {
   try {
     await ElMessageBox.confirm(`确定删除选中的 ${selectedRows.value.length} 门课程吗？此操作不可恢复。`, '确认批量删除', { type: 'warning' })
     const ids = selectedRows.value.map(r => r.id)
-    await api.post('/courses/batch-delete', { ids })
+    await batchDeleteCourses(ids)
     ElMessage.success(`成功删除 ${ids.length} 门课程`)
     selectedRows.value = []
     loadCourses()
