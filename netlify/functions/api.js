@@ -4,7 +4,7 @@ import app from '../../backend/index.js'
 // 包装 serverless handler，修复二进制响应问题
 const serverlessHandler = serverless(app)
 
-export const handler = async (event, context) => {
+const handler = async (event, context) => {
   const result = await serverlessHandler(event, context)
 
   // 检查响应体是否为 Buffer（二进制数据）
@@ -15,3 +15,6 @@ export const handler = async (event, context) => {
 
   return result
 }
+
+// 直接赋值 module.exports，确保 esbuild CJS 输出正确导出 handler
+module.exports = { handler }

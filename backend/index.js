@@ -1,38 +1,35 @@
 // 最先加载环境变量，确保后续所有模块都能读取到 process.env
+import dotenv from 'dotenv'
 const isServerless = !!process.env.NETLIFY || !!process.env.LAMBDA_TASK_ROOT
 if (!isServerless) {
-  try {
-    const dotenv = await import('dotenv')
-    const mod = dotenv.default || dotenv
-    if (mod && mod.config) mod.config()
-  } catch { /* ignore */ }
+  try { dotenv.config() } catch { /* ignore */ }
 }
 
 import express from 'express'
 import cors from 'cors'
 import rateLimit from 'express-rate-limit'
 
-// 动态导入 db 和路由，确保 dotenv 已加载
-const { default: pool } = await import('./db.js')
-const { default: authRoutes } = await import('./routes/auth.js')
-const { default: studentRoutes } = await import('./routes/students.js')
-const { default: gradeRoutes } = await import('./routes/grades.js')
-const { default: announcementRoutes } = await import('./routes/announcements.js')
-const { default: chatRoutes } = await import('./routes/chat.js')
-const { default: majorRoutes } = await import('./routes/majors.js')
-const { default: fileRoutes } = await import('./routes/files.js')
-const { default: examRoutes } = await import('./routes/exams.js')
-const { default: notificationRoutes } = await import('./routes/notifications.js')
-const { default: studyMaterialRoutes } = await import('./routes/study_materials.js')
-const { default: courseRoutes } = await import('./routes/courses.js')
-const { default: classRoutes } = await import('./routes/classes.js')
-const { default: groupRoutes } = await import('./routes/groups.js')
-const { default: groupChatRoutes } = await import('./routes/group_chat.js')
-const { default: groupFileRoutes } = await import('./routes/group_files.js')
-const { default: settingsRoutes } = await import('./routes/settings.js')
-const { default: rewardRoutes } = await import('./routes/rewards.js')
-const { default: photoWallRoutes } = await import('./routes/photo_wall.js')
-const { default: forumRoutes } = await import('./routes/forum.js')
+// 导入 db 和路由
+import pool from './db.js'
+import authRoutes from './routes/auth.js'
+import studentRoutes from './routes/students.js'
+import gradeRoutes from './routes/grades.js'
+import announcementRoutes from './routes/announcements.js'
+import chatRoutes from './routes/chat.js'
+import majorRoutes from './routes/majors.js'
+import fileRoutes from './routes/files.js'
+import examRoutes from './routes/exams.js'
+import notificationRoutes from './routes/notifications.js'
+import studyMaterialRoutes from './routes/study_materials.js'
+import courseRoutes from './routes/courses.js'
+import classRoutes from './routes/classes.js'
+import groupRoutes from './routes/groups.js'
+import groupChatRoutes from './routes/group_chat.js'
+import groupFileRoutes from './routes/group_files.js'
+import settingsRoutes from './routes/settings.js'
+import rewardRoutes from './routes/rewards.js'
+import photoWallRoutes from './routes/photo_wall.js'
+import forumRoutes from './routes/forum.js'
 
 const app = express()
 
