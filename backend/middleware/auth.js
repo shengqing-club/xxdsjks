@@ -3,14 +3,19 @@ import jwt from 'jsonwebtoken'
 const JWT_SECRET = process.env.JWT_SECRET
 if (!JWT_SECRET) {
   console.error('FATAL: JWT_SECRET environment variable is not set')
-  process.exit(1)
 }
 
 export function signToken(payload) {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET is not set')
+  }
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' })
 }
 
 export function authMiddleware(req, res, next) {
+  if (!JWT_SECRET) {
+    return res.status(500).json({ message: '服务器配置错误：JWT_SECRET 未设置' })
+  }
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ message: '未登录或Token已过期' })

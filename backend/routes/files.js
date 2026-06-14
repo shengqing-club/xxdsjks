@@ -28,7 +28,7 @@ const ensureFileDataColumn = async () => {
     // 忽略列已存在等错误
   }
 }
-ensureFileDataColumn()
+ensureFileDataColumn().catch(() => {})
 
 // ========== 设置路由（必须在 /:id 路由之前，避免被参数匹配拦截） ==========
 

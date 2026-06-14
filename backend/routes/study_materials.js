@@ -187,7 +187,7 @@ const ensureColumns = async () => {
     // 忽略列已存在等错误
   }
 }
-ensureColumns()
+ensureColumns().catch(() => {})
 
 // 获取复习资料列表（支持分页和搜索）
 router.get('/', async (req, res) => {
