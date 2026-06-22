@@ -1,0 +1,1 @@
+import{i as e}from"./index-Cft5N3Dr.js";function t(){return e.get(`/announcements/active`)}function n(){return e.get(`/announcements`)}function r(t){return e.post(`/announcements`,t)}function i(t,n){return e.put(`/announcements/${t}`,n)}function a(t){return e.delete(`/announcements/${t}`)}export{i as a,n as i,a as n,t as r,r as t};

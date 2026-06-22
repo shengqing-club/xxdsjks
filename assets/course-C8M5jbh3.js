@@ -1,0 +1,1 @@
+import{i as e}from"./index-Cft5N3Dr.js";function t(){return e.get(`/courses`)}var n=t=>e.post(`/courses`,t),r=(t,n)=>e.put(`/courses/${t}`,n),i=t=>e.delete(`/courses/${t}`),a=t=>e.post(`/courses/batch-delete`,{ids:t});export{r as a,t as i,a as n,i as r,n as t};

@@ -1,0 +1,1 @@
+import{i as e}from"./index-Cft5N3Dr.js";var t=()=>e.get(`/rewards`),n=t=>e.post(`/rewards`,t),r=t=>e.delete(`/rewards/${t}`);export{r as n,t as r,n as t};

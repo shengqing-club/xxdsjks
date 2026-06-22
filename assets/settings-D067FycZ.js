@@ -1,0 +1,1 @@
+import{i as e}from"./index-Cft5N3Dr.js";var t=()=>e.get(`/settings/scrolling-text`),n=t=>e.put(`/settings/scrolling-text`,t),r=()=>e.get(`/settings/fullscreen-text`),i=t=>e.put(`/settings/fullscreen-text`,t);export{n as i,t as n,i as r,r as t};

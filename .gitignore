@@ -1,0 +1,12 @@
+node_modules
+dist
+.bak.
+*.bak.*
+upload
+*.mp3
+*.gif
+*.jpg
+backend/node_modules
+*.log
+.DS_Store
+.env

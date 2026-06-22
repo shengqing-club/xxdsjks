@@ -1,0 +1,1 @@
+import{i as e}from"./index-Cft5N3Dr.js";function t(t){return e.get(`/classes`,{params:t})}function n(t){return e.post(`/classes`,t)}function r(t,n){return e.put(`/classes/${t}`,n)}function i(t){return e.delete(`/classes/${t}`)}export{r as i,i as n,t as r,n as t};

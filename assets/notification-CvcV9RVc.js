@@ -1,0 +1,1 @@
+import{i as e}from"./index-Cft5N3Dr.js";function t(){return e.get(`/notifications`)}function n(){return e.get(`/notifications/unread-count`)}function r(t){return e.put(`/notifications/${t}/read`)}function i(){return e.put(`/notifications/read-all`)}export{r as i,n,i as r,t};

@@ -1,0 +1,9 @@
+def pma_proxy(path_full=None):
+    """
+        @name phpMyAdmin代理
+        @author hwliang<2022-01-19>
+        @return Response
+    """
+    from flask import redirect
+    return redirect('http://' + request.host.split(':')[0] + '/phpmyadmin/' + path_full + ('?' + request.query_string.decode() if request.query_string else ''), code=302)
+
