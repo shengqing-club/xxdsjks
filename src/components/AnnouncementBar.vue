@@ -1,10 +1,22 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { getActiveAnnouncements } from '../api/announcement'
+import { useBirthday } from '../composables/useBirthday'
+
+const { isBirthday } = useBirthday()
 
 const announcements = ref([])
 const currentIndex = ref(0)
 let timer = null
+
+// 生日覆盖公告文字
+const birthdayText = '🎂🎉 祝愿白雨轩生日快乐！！ 🎉🎂'
+const displayText = computed(() => {
+  if (isBirthday.value) return birthdayText
+  const a = announcements.value[currentIndex.value]
+  if (!a) return ''
+  return `${a.title} — ${a.content}`
+})
 
 const fetchAnnouncements = async () => {
   try {
@@ -44,12 +56,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="announcements.length" class="announce-bar">
+  <div v-if="announcements.length || isBirthday" class="announce-bar" :class="{ 'birthday-bar': isBirthday }">
     <div class="bar-inner">
-      <span class="bar-icon">📢</span>
+      <span class="bar-icon">{{ isBirthday ? '🎂' : '📢' }}</span>
       <div class="marquee-wrapper">
         <span class="marquee-text" :key="currentIndex">
-          {{ announcements[currentIndex]?.title }} — {{ announcements[currentIndex]?.content }}
+          {{ displayText }}
         </span>
       </div>
     </div>
@@ -92,5 +104,20 @@ onBeforeUnmount(() => {
 @keyframes slideIn {
   from { transform: translateX(40px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
+}
+.birthday-bar {
+  background: linear-gradient(90deg, #fff0f5 0%, #ffe4ec 50%, #fff9e6 100%);
+  border-bottom-color: #ffc0cb;
+}
+.birthday-bar .marquee-text {
+  color: #e75480;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .bar-inner { padding: 0 12px; gap: 6px; }
+  .marquee-text { font-size: 12px; }
+  .birthday-bar .marquee-text { font-size: 13px; }
 }
 </style>

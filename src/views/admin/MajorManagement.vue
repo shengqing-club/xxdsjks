@@ -158,4 +158,12 @@ onMounted(fetchData)
 .toolbar { display: flex; align-items: center; gap: 12px; }
 .table-card { border-radius: 8px; }
 .table-card :deep(.el-card__body) { padding: 0; }
+
+@media (max-width: 768px) {
+  .major-page { max-width: 100%; }
+  .stats-row :deep(.el-col) { max-width: 100% !important; flex: 0 0 100% !important; margin-bottom: 12px; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .table-card :deep(.el-table) { min-width: 600px; }
+  .major-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 480px; }
+}
 </style>

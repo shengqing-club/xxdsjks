@@ -277,4 +277,18 @@ onMounted(() => { loadPosts() })
 .comment-header { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #999; margin-bottom: 4px; }
 .comment-author { font-weight: 500; color: #333; }
 .comment-content { font-size: 14px; color: #555; line-height: 1.5; }
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .forum-header { flex-direction: column; align-items: flex-start; }
+  .forum-actions { width: 100%; }
+  .forum-actions .el-input { flex: 1; }
+  .post-card-header { flex-wrap: wrap; gap: 6px; }
+  .post-stats { flex-wrap: wrap; gap: 10px; }
+}
+@media (max-width: 480px) {
+  .forum-tabs { gap: 6px; }
+  .post-title { font-size: 15px; }
+  .post-preview { font-size: 13px; }
+}
 </style>

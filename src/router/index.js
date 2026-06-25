@@ -32,6 +32,8 @@ const routes = [
       { path: 'forum', name: 'ForumManagement', component: () => import('../views/admin/ForumManagement.vue') },
       { path: 'bar', name: 'BarChart', component: () => import('../views/admin/BarChart.vue') },
       { path: 'pie', name: 'PieChart', component: () => import('../views/admin/PieChart.vue') },
+      { path: 'game', name: 'BubbleGame', component: () => import('../views/BubbleGame.vue') },
+      { path: 'game-settings', name: 'GameSettings', component: () => import('../views/admin/GameSettings.vue') },
     ],
   },
   {
@@ -52,6 +54,7 @@ const routes = [
       { path: 'photo-wall', name: 'PhotoWall', component: () => import('../views/student/PhotoWall.vue') },
       { path: 'forum', name: 'StudentForum', component: () => import('../views/student/StudentForum.vue') },
       { path: 'password', name: 'ChangePassword', component: () => import('../views/student/ChangePassword.vue') },
+      { path: 'game', name: 'StudentBubbleGame', component: () => import('../views/BubbleGame.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/login' },

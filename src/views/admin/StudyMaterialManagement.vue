@@ -201,7 +201,7 @@ import {
   Reading, Upload, Download, Delete, Search, Edit,
   FolderOpened, Document, Picture, VideoPlay, Headset
 } from '@element-plus/icons-vue'
-import { getStudyMaterials, uploadStudyMaterial, uploadStudyMaterialChunked, uploadStudyMaterialNewVersion, deleteStudyMaterial, downloadStudyMaterial, getMaterialVersions } from '../../api/study_material'
+import { getStudyMaterials, uploadStudyMaterial, deleteStudyMaterial, downloadStudyMaterial, getMaterialVersions } from '../../api/study_material'
 import { getClasses } from '../../api/class'
 import { getCourses } from '../../api/course'
 import UploadComfortText from '../../components/UploadComfortText.vue'
@@ -356,27 +356,16 @@ const confirmUpload = async () => {
 
   uploading.value = true
   try {
-    const uploadOptions = {
-      title: uploadFile.value.name,
-      course_name: uploadForm.value.course_name,
-      class_name: uploadForm.value.class_name
-    }
-
-    if (uploadFile.value.size > 5 * 1024 * 1024) {
-      // 大文件：分片上传（绕过 Netlify 6MB 限制）
-      await uploadStudyMaterialChunked(uploadFile.value, uploadOptions, (progress) => {
-        uploadProgress.value = progress
-      })
-    } else {
-      // 小文件：普通上传
-      const formData = new FormData()
-      formData.append('file', uploadFile.value)
-      formData.append('title', uploadFile.value.name)
-      formData.append('class_name', uploadForm.value.class_name)
-      formData.append('course_name', uploadForm.value.course_name)
-      formData.append('description', uploadForm.value.description || '')
-      await uploadStudyMaterial(formData)
-    }
+    // 统一单次上传（服务器配置足够，不再分片）
+    const formData = new FormData()
+    formData.append('file', uploadFile.value)
+    formData.append('title', uploadFile.value.name)
+    formData.append('class_name', uploadForm.value.class_name)
+    formData.append('course_name', uploadForm.value.course_name)
+    formData.append('description', uploadForm.value.description || '')
+    await uploadStudyMaterial(formData, (progress) => {
+      uploadProgress.value = progress
+    })
     ElMessage.success('上传成功')
     uploadDialogVisible.value = false
     uploadProgress.value = 0
@@ -448,12 +437,14 @@ const confirmNewVersion = async () => {
   }
   versionUploading.value = true
   try {
-    await uploadStudyMaterialNewVersion(
-      versionUploadFile.value,
-      currentMaterial.value.version_group,
-      { title: currentMaterial.value.title, course_name: currentMaterial.value.course_name, class_name: currentMaterial.value.class_name },
-      (progress) => { versionUploadProgress.value = progress }
-    )
+    // 统一单次上传新版本（不再分片）
+    const formData = new FormData()
+    formData.append('file', versionUploadFile.value)
+    formData.append('title', currentMaterial.value.title)
+    formData.append('course_name', currentMaterial.value.course_name)
+    formData.append('class_name', currentMaterial.value.class_name)
+    formData.append('version_group', currentMaterial.value.version_group)
+    await uploadStudyMaterial(formData, (progress) => { versionUploadProgress.value = progress })
     ElMessage.success('新版本上传成功')
     newVersionDialogVisible.value = false
     versionUploadProgress.value = 0
@@ -539,5 +530,18 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+@media (max-width: 768px) {
+  .study-material-page { padding: 0 4px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .header-actions { width: 100%; }
+  .filter-bar { flex-direction: column; align-items: stretch; }
+  .filter-bar .el-select,
+  .filter-bar .el-input { width: 100% !important; margin-left: 0 !important; }
+  .study-material-page > .el-table { min-width: 800px; }
+  .study-material-page > .el-table .el-table__body-wrapper { overflow-x: auto; }
+  .pagination { justify-content: center; }
+  .study-material-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 500px; }
 }
 </style>

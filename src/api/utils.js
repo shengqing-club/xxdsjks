@@ -1,9 +1,6 @@
 import api from './index'
 import { ElMessage } from 'element-plus'
 
-const CHUNK_SIZE = 1024 * 1024 // 1MB（base64 后约 1.33MB）
-const PARALLEL_CHUNKS = 4 // 并行下载数
-
 const comfortTexts = [
   '大模型思考中... 其实是在帮你搬文件...',
   'AI正在深度学习如何更快地下载...',
@@ -79,129 +76,14 @@ function removeDownloadUI() {
 }
 
 /**
- * 快速 base64 → Uint8Array（使用 TextDecoder 代替逐字节 atob）
+ * 流式下载文件（阿里云服务器环境，直接二进制流下载）
  */
-function base64ToUint8Array(base64) {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  // 按 1024 块批量写入，减少属性赋值次数
-  const blockSize = 1024
-  for (let i = 0; i < binary.length; i += blockSize) {
-    const end = Math.min(i + blockSize, binary.length)
-    for (let j = i; j < end; j++) {
-      bytes[j] = binary.charCodeAt(j)
-    }
-  }
-  return bytes
-}
-
-/**
- * 下载单个分片，带重试机制和 401 处理
- */
-async function fetchChunk(chunkBaseUrl, chunkIndex, chunkSize, maxRetries = 3) {
+export async function downloadFileStreaming(downloadUrl, fileName, fileType, onProgress) {
   const token = (localStorage.getItem('token') || '').replace(/^["']|["']$/g, '')
-  const url = `/api${chunkBaseUrl}?chunk=${chunkIndex}&chunkSize=${chunkSize}`
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60000) // 60秒超时（2MB 分片需更长时间）
-
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` },
-        signal: controller.signal
-      })
-      clearTimeout(timeoutId)
-
-      // 处理 401
-      if (res.status === 401) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        window.location.href = '/login'
-        throw new Error('登录已过期')
-      }
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '')
-        throw new Error(`HTTP ${res.status}: ${errText}`)
-      }
-
-      const data = await res.json()
-      if (!data || !data.base64) {
-        throw new Error('响应中缺少 base64 数据')
-      }
-
-      const newToken = res.headers.get('x-refresh-token')
-      if (newToken) {
-        localStorage.setItem('token', newToken)
-      }
-
-      return data
-    } catch (e) {
-      if (attempt === maxRetries - 1) throw e
-      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
-    }
-  }
-  throw new Error('分片下载重试耗尽')
-}
-
-/**
- * 并行分片下载文件（并发 PARALLEL_CHUNKS 个请求）
- */
-export async function downloadFileChunked(chunkBaseUrl, fileMeta, onProgress) {
-  const totalSize = parseInt(fileMeta.fileSize, 10) || 0
-  if (totalSize <= 0) throw new Error('文件大小未知，无法分片下载')
-  const totalChunks = Math.ceil(totalSize / CHUNK_SIZE)
-  const chunks = new Array(totalChunks)
-  let completedChunks = 0
-
-  // 并行下载调度器
-  let nextChunkIndex = 0
-  const workers = new Array(PARALLEL_CHUNKS).fill(null).map(async () => {
-    while (true) {
-      // 原子地获取下一个待下载的分片索引
-      const myIndex = nextChunkIndex++
-      if (myIndex >= totalChunks) break
-
-      try {
-        const data = await fetchChunk(chunkBaseUrl, myIndex, CHUNK_SIZE)
-        chunks[myIndex] = base64ToUint8Array(data.base64)
-      } catch (e) {
-        // 如果该分片失败，用 slot 标记为 error
-        chunks[myIndex] = null
-        throw e
-      }
-
-      completedChunks++
-      if (onProgress) {
-        onProgress(Math.round((completedChunks / totalChunks) * 100))
-      }
-    }
-  })
-
-  // 等待所有 worker 完成
-  await Promise.all(workers)
-
-  // 检查是否有失败的分片
-  for (let i = 0; i < totalChunks; i++) {
-    if (chunks[i] === null || chunks[i] === undefined) {
-      throw new Error(`分片 ${i} 下载失败`)
-    }
-  }
-
-  return new Blob(chunks, { type: fileMeta.fileType || 'application/octet-stream' })
-}
-
-/**
- * 流式下载文件（非 Serverless 环境，直接以二进制下载，无 base64 开销）
- * 速度最快，适用于本地开发或传统服务器部署
- */
-export async function downloadFileStreaming(streamUrl, fileName, fileSize, fileType, onProgress) {
-  const token = (localStorage.getItem('token') || '').replace(/^["']|["']$/g, '')
-  const url = `/api${streamUrl}`
+  const url = `/api${downloadUrl}`
 
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 30000) // 30秒超时
+  const timeoutId = setTimeout(() => controller.abort(), 300000) // 5分钟超时（大文件）
 
   const res = await fetch(url, {
     headers: { 'Authorization': `Bearer ${token}` },
@@ -220,10 +102,33 @@ export async function downloadFileStreaming(streamUrl, fileName, fileSize, fileT
     throw new Error(`HTTP ${res.status}`)
   }
 
-  // 对于小文件（< 50MB），直接一次性读取
-  const buffer = await res.arrayBuffer()
-  const blob = new Blob([buffer], { type: fileType || res.headers.get('Content-Type') || 'application/octet-stream' })
-  if (onProgress) onProgress(100)
+  // 获取文件总大小
+  const totalSize = parseInt(res.headers.get('Content-Length')) || 0
+
+  // 使用 ReadableStream 读取并跟踪进度
+  const reader = res.body.getReader()
+  const chunks = []
+  let receivedSize = 0
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    receivedSize += value.length
+    if (onProgress && totalSize > 0) {
+      onProgress(Math.round((receivedSize / totalSize) * 100))
+    }
+  }
+
+  // 合并 chunks
+  const allChunks = new Uint8Array(receivedSize)
+  let position = 0
+  for (const chunk of chunks) {
+    allChunks.set(chunk, position)
+    position += chunk.length
+  }
+
+  const blob = new Blob([allChunks], { type: fileType || res.headers.get('Content-Type') || 'application/octet-stream' })
   return blob
 }
 
@@ -238,58 +143,33 @@ export function triggerDownload(blob, fileName) {
 }
 
 /**
- * 智能下载：自动选择最优策略
- * - 非 Netlify：优先流式下载（无 base64 开销）
- * - Netlify / 流式失败：并行分片下载
+ * 智能下载：大文件(>10MB)用浏览器原生下载，小文件用流式下载
  */
-export async function smartDownload(downloadUrl, chunkBaseUrl, fileMeta, fileName, onProgress) {
+export async function smartDownload(downloadUrl, _chunkBaseUrl, fileMeta, fileName, onProgress) {
+  const fileSize = fileMeta.fileSize || 0
+  const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024 // 10MB
+
+  // 大文件：使用浏览器原生下载（不经过 JS 内存）
+  if (fileSize > LARGE_FILE_THRESHOLD) {
+    const token = (localStorage.getItem('token') || '').replace(/^["']|["']$/g, '')
+    // 构造带 token 的下载 URL
+    const url = `/api${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+    window.open(url, '_blank')
+    if (onProgress) onProgress(100)
+    return
+  }
+
+  // 小文件：使用流式下载 + 进度 UI
   const overlay = createDownloadUI()
   const progressCallback = (percent) => {
     updateDownloadUI(overlay, percent)
     if (onProgress) onProgress(percent)
   }
   try {
-    const size = parseInt(fileMeta.fileSize, 10) || 0
-
-    // 策略 1：小文件（< 2MB）直接一次性下载（base64）
-    if (size > 0 && size < 2 * 1024 * 1024) {
-      updateDownloadUI(overlay, 50)
-      try {
-        const res = await api.get(downloadUrl, { timeout: 30000 })
-        if (res.data && res.data.base64) {
-          updateDownloadUI(overlay, 100)
-          const bytes = base64ToUint8Array(res.data.base64)
-          const blob = new Blob([bytes], { type: res.data.fileType || 'application/octet-stream' })
-          triggerDownload(blob, fileName || res.data.fileName)
-          setTimeout(() => { removeDownloadUI(); ElMessage.success('下载成功') }, 500)
-          return
-        }
-      } catch (e) {
-        console.warn('直接下载失败，回退:', e.message)
-      }
-    }
-
-    // 策略 2：流式下载（仅非 Netlify 且文件 < 10MB 时尝试，避免大文件超时卡住）
-    const isNetlify = !!window.location.hostname.match(/\.netlify\.app$/)
-    if (!isNetlify && size >= 2 * 1024 * 1024 && size < 10 * 1024 * 1024) {
-      try {
-        const streamUrl = downloadUrl.replace(/\/download$/, '/download/stream')
-        updateDownloadUI(overlay, 10)
-        const blob = await downloadFileStreaming(streamUrl, fileName, size, fileMeta.fileType, (p) => {
-          updateDownloadUI(overlay, Math.max(10, p))
-        })
-        triggerDownload(blob, fileName)
-        setTimeout(() => { removeDownloadUI(); ElMessage.success('下载成功') }, 500)
-        return
-      } catch (e) {
-        console.warn('流式下载失败，回退到分片下载:', e.message)
-        // 回退到分片下载
-      }
-    }
-
-    // 策略 3：并行分片下载（兼容所有环境，包括 Netlify）
-    const blob = await downloadFileChunked(chunkBaseUrl, { ...fileMeta, fileSize: size }, progressCallback)
+    updateDownloadUI(overlay, 10)
+    const blob = await downloadFileStreaming(downloadUrl, fileName, fileMeta.fileType, progressCallback)
     triggerDownload(blob, fileName)
+    updateDownloadUI(overlay, 100)
     setTimeout(() => { removeDownloadUI(); ElMessage.success('下载成功') }, 500)
   } catch (e) {
     removeDownloadUI()
@@ -298,18 +178,12 @@ export async function smartDownload(downloadUrl, chunkBaseUrl, fileMeta, fileNam
   }
 }
 
-export async function smartLoadImage(downloadUrl, chunkBaseUrl, fileMeta) {
+/**
+ * 智能加载图片（阿里云服务器环境，直接流式下载）
+ */
+export async function smartLoadImage(downloadUrl, _chunkBaseUrl, fileMeta) {
   try {
-    if (!fileMeta.fileSize || fileMeta.fileSize < 4 * 1024 * 1024) {
-      try {
-        const res = await api.get(downloadUrl, { timeout: 30000 })
-        if (res.data && res.data.base64) {
-          const bytes = base64ToUint8Array(res.data.base64)
-          return URL.createObjectURL(new Blob([bytes], { type: res.data.fileType || 'image/png' }))
-        }
-      } catch (e) { /* fallback */ }
-    }
-    const blob = await downloadFileChunked(chunkBaseUrl, fileMeta)
+    const blob = await downloadFileStreaming(downloadUrl, null, fileMeta.fileType || 'image/png')
     return URL.createObjectURL(blob)
   } catch (e) {
     console.error('图片加载失败:', e)

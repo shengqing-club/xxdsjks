@@ -172,7 +172,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, Download, Delete, Edit, Document, Picture, VideoPlay, Headset, Files, View } from '@element-plus/icons-vue'
-import { getFiles, uploadFile, uploadFileChunked, downloadFile, deleteFile, getStudentUploadSetting, setStudentUploadSetting, getDangerousFileBlockSetting, setDangerousFileBlockSetting } from '../../api/file'
+import { getFiles, uploadFile, downloadFile, deleteFile, getStudentUploadSetting, setStudentUploadSetting, getDangerousFileBlockSetting, setDangerousFileBlockSetting } from '../../api/file'
 import UploadComfortText from '../../components/UploadComfortText.vue'
 import api from '../../api/index'
 
@@ -285,23 +285,18 @@ const submitUpload = async () => {
       uploaderName: '管理员'
     }
 
-    if (rawFile.size > 5 * 1024 * 1024) {
-      // 大文件：分片上传
-      await uploadFileChunked(rawFile, uploadOptions, (progress) => {
-        uploadProgress.value = progress
-      })
-    } else {
-      // 小文件：普通上传
-      const formData = new FormData()
-      formData.append('file', rawFile)
-      formData.append('originalFilename', uploadFileList.value[0].name)
-      formData.append('uploaderRole', 'admin')
-      formData.append('uploaderId', 'admin')
-      formData.append('uploaderName', '管理员')
-      formData.append('category', uploadForm.value.category)
-      formData.append('description', uploadForm.value.description)
-      await uploadFile(formData)
-    }
+    // 统一单次上传（服务器配置足够，不再分片）
+    const formData = new FormData()
+    formData.append('file', rawFile)
+    formData.append('originalFilename', uploadFileList.value[0].name)
+    formData.append('uploaderRole', 'admin')
+    formData.append('uploaderId', 'admin')
+    formData.append('uploaderName', '管理员')
+    formData.append('category', uploadForm.value.category)
+    formData.append('description', uploadForm.value.description)
+    await uploadFile(formData, (progress) => {
+      uploadProgress.value = progress
+    })
     ElMessage.success('上传成功')
     uploadDialogVisible.value = false
     uploadProgress.value = 0
@@ -453,5 +448,17 @@ onBeforeUnmount(() => {
 }
 :deep(.el-upload-dragger .el-icon) {
   margin-bottom: 8px;
+}
+
+@media (max-width: 768px) {
+  .file-page { max-width: 100%; }
+  .page-header { flex-direction: column; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar .el-select { width: 100% !important; }
+  .toolbar-right { margin-left: 0; }
+  .result-count { margin-left: 0; text-align: center; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .table-card :deep(.el-table) { min-width: 700px; }
+  .file-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 500px; }
 }
 </style>

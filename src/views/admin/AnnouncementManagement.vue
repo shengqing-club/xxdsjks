@@ -307,4 +307,13 @@ onMounted(() => {
 .table-card :deep(.el-card__body) {
   padding: 0;
 }
+
+@media (max-width: 768px) {
+  .announcement-page { max-width: 100%; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .result-count { margin-left: 0; text-align: center; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .table-card :deep(.el-table) { min-width: 600px; }
+  .announcement-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 560px; }
+}
 </style>

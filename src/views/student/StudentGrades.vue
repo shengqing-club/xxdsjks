@@ -107,7 +107,7 @@ const handleExport = () => {
 
 // Radar chart for top 5
 const initRadarChart = () => {
-  if (!chartRef.value || !filteredGrades.value.length) return
+  if (!chartRef.value) return
 
   if (chartInstance) {
     chartInstance.dispose()
@@ -118,7 +118,20 @@ const initRadarChart = () => {
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
 
-  if (top5.length < 3) return // radar needs at least 3 axes
+  if (top5.length < 3) {
+    chartInstance = echarts.init(chartRef.value)
+    chartInstance.setOption({
+      title: {
+        text: '科目不足（需至少3门）',
+        left: 'center',
+        top: 'center',
+        textStyle: { color: '#94a3b8', fontSize: 14, fontWeight: 500 },
+      },
+      series: [],
+      radar: { indicator: [] },
+    })
+    return
+  }
 
   chartInstance = echarts.init(chartRef.value)
   chartInstance.setOption({
@@ -385,5 +398,17 @@ onBeforeUnmount(() => {
 .chart-container {
   width: 100%;
   height: 300px;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .filter-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .filter-stats { margin-left: 0; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .page-header h2 { font-size: 18px; }
+}
+@media (max-width: 480px) {
+  .page-header h2 { font-size: 16px; }
+  .chart-container { height: 250px; }
 }
 </style>

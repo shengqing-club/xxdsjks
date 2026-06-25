@@ -1,0 +1,130 @@
+{
+  "timestamp": "2026-06-18T05:12:05.480Z",
+  "results": [
+    {
+      "table": "majors",
+      "status": "ok",
+      "neon": 9,
+      "mysql": 9
+    },
+    {
+      "table": "admins",
+      "status": "ok",
+      "neon": 1,
+      "mysql": 1
+    },
+    {
+      "table": "announcements",
+      "status": "ok",
+      "neon": 6,
+      "mysql": 6
+    },
+    {
+      "table": "students",
+      "status": "ok",
+      "neon": 12,
+      "mysql": 12
+    },
+    {
+      "table": "classes",
+      "status": "ok",
+      "neon": 2,
+      "mysql": 2
+    },
+    {
+      "table": "courses",
+      "status": "ok",
+      "neon": 1,
+      "mysql": 1
+    },
+    {
+      "table": "exams",
+      "status": "ok",
+      "neon": 18,
+      "mysql": 18
+    },
+    {
+      "table": "grades",
+      "status": "ok",
+      "neon": 13,
+      "mysql": 13
+    },
+    {
+      "table": "notifications",
+      "status": "ok",
+      "neon": 93,
+      "mysql": 93
+    },
+    {
+      "table": "site_settings",
+      "status": "ok",
+      "neon": 6,
+      "mysql": 6
+    },
+    {
+      "table": "study_materials",
+      "status": "ok",
+      "neon": 2,
+      "mysql": 2
+    },
+    {
+      "table": "rewards_punishments",
+      "status": "ok",
+      "neon": 3,
+      "mysql": 3
+    },
+    {
+      "table": "forum_posts",
+      "status": "ok",
+      "neon": 2,
+      "mysql": 2
+    },
+    {
+      "table": "forum_comments",
+      "status": "cleared",
+      "count": 0
+    },
+    {
+      "table": "forum_likes",
+      "status": "cleared",
+      "count": 0
+    },
+    {
+      "table": "photo_wall",
+      "status": "ok",
+      "neon": 3,
+      "mysql": 3
+    },
+    {
+      "table": "groups",
+      "status": "ok",
+      "neon": 1,
+      "mysql": 1
+    },
+    {
+      "table": "group_members",
+      "status": "ok",
+      "neon": 5,
+      "mysql": 5
+    },
+    {
+      "table": "group_files",
+      "status": "ok",
+      "neon": 1,
+      "mysql": 1
+    },
+    {
+      "table": "group_chat_messages",
+      "status": "ok",
+      "neon": 10,
+      "mysql": 10
+    },
+    {
+      "table": "chat_messages",
+      "status": "cleared",
+      "count": 0
+    }
+  ],
+  "totalNeon": 188,
+  "totalMysql": 188
+}

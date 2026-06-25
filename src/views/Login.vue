@@ -35,6 +35,35 @@ const handleLogin = async (el) => {
 }
 
 onMounted(() => { setTimeout(() => { visible.value = true }, 60) })
+
+// 生日彩蛋：6月25日当天标题动画（渐显3秒 → 渐隐回原标题）
+const isBirthday = ref(false)
+const showBirthdayTitle = ref(false)
+const birthdayTitleVisible = ref(false)
+const birthdayFading = ref(false)
+
+onMounted(() => {
+  const now = new Date()
+  isBirthday.value = (now.getMonth() === 5 && now.getDate() === 25)
+  if (isBirthday.value && !localStorage.getItem('birthday_title_seen_2026')) {
+    setTimeout(() => {
+      showBirthdayTitle.value = true
+      // 渐显：100ms 后开始显示
+      setTimeout(() => { birthdayTitleVisible.value = true }, 100)
+      // 存在3秒后开始渐隐
+      setTimeout(() => {
+        birthdayFading.value = true
+        // 渐隐动画完成后恢复原标题
+        setTimeout(() => {
+          showBirthdayTitle.value = false
+          birthdayTitleVisible.value = false
+          birthdayFading.value = false
+          localStorage.setItem('birthday_title_seen_2026', '1')
+        }, 1200)
+      }, 3000)
+    }, 800)
+  }
+})
 </script>
 
 <template>
@@ -56,7 +85,14 @@ onMounted(() => { setTimeout(() => { visible.value = true }, 60) })
             <line x1="40" y1="22" x2="40" y2="36" stroke="#1a56db" stroke-width="2" opacity="0.9"/>
           </svg>
         </div>
-        <h1 class="school-name">西安信息职业大学</h1>
+        <div class="school-name-wrapper">
+          <h1 class="school-name" :class="{ 'birthday-title-hide': showBirthdayTitle }">
+            西安信息职业大学
+          </h1>
+          <h1 v-if="showBirthdayTitle" class="school-name birthday-title" :class="{ 'birthday-title-show': birthdayTitleVisible, 'birthday-title-fadeout': birthdayFading }">
+            祝白雨轩生日快乐
+          </h1>
+        </div>
         <p class="system-name">实践考试传输终端</p>
       </div>
 
@@ -96,7 +132,7 @@ onMounted(() => { setTimeout(() => { visible.value = true }, 60) })
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f0f5ff;
+  background: var(--bg-primary);
   position: relative;
   overflow: hidden;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -122,7 +158,7 @@ onMounted(() => { setTimeout(() => { visible.value = true }, 60) })
 /* 登录卡片 */
 .login-card {
   width: 400px;
-  background: #ffffff;
+  background: var(--bg-card);
   border-radius: 12px;
   padding: 40px 40px 36px;
   box-shadow: 0 2px 20px rgba(26,86,219,0.07), 0 0 0 1px rgba(26,86,219,0.04);
@@ -148,13 +184,14 @@ onMounted(() => { setTimeout(() => { visible.value = true }, 60) })
 .card-header {
   text-align: center;
   margin-bottom: 32px;
+  position: relative;
 }
 
 .header-icon {
   width: 56px;
   height: 56px;
   margin: 0 auto 16px;
-  background: #eff6ff;
+  background: var(--accent-bg);
   border-radius: 14px;
   display: flex;
   align-items: center;
@@ -169,14 +206,57 @@ onMounted(() => { setTimeout(() => { visible.value = true }, 60) })
   font-family: KaiTi, STKaiti, "楷体", serif;
   font-size: 22px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
   letter-spacing: 4px;
   margin: 0 0 6px;
 }
 
+.school-name-wrapper {
+  position: relative;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.school-name-wrapper .school-name {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  transition: opacity 1s ease, transform 1s ease;
+}
+
+.school-name.birthday-title-hide {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.school-name.birthday-title {
+  font-family: 'KaiTi', 'STKaiti', '楷体', cursive;
+  font-size: 24px;
+  background: linear-gradient(135deg, #ff6b9d, #ff8e53, #ffd700);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.school-name.birthday-title.birthday-title-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.school-name.birthday-title.birthday-title-fadeout {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
 .system-name {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--text-muted);
   margin: 0;
   letter-spacing: 1px;
 }
@@ -188,15 +268,15 @@ onMounted(() => { setTimeout(() => { visible.value = true }, 60) })
 
 .login-form :deep(.el-input__wrapper) {
   border-radius: 8px;
-  box-shadow: 0 0 0 1px #dbe4f0 !important;
+  box-shadow: 0 0 0 1px var(--border-color) !important;
   transition: all 0.25s;
   padding: 2px 12px;
 }
 .login-form :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #93c5fd !important;
+  box-shadow: 0 0 0 1px var(--accent-light) !important;
 }
 .login-form :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 2px #1a56db !important;
+  box-shadow: 0 0 0 2px var(--accent) !important;
 }
 
 .login-form :deep(.el-input__inner) {
@@ -205,7 +285,7 @@ onMounted(() => { setTimeout(() => { visible.value = true }, 60) })
 }
 
 .login-form :deep(.el-input__prefix .el-icon) {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 16px;
 }
 

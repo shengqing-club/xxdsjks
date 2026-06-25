@@ -195,7 +195,7 @@ const uploadChatFile = async (file, type) => {
   try {
     const formData = new FormData()
     formData.append('file', file)
-    await uploadGroupFile(props.group.id, formData)
+    await uploadGroupChatFile(props.group.id, formData)
     ElMessage.success('上传成功')
     await loadMessages()
   } catch (err) {
@@ -366,5 +366,20 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 8px;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .group-chat-panel { height: 400px; }
+  .message-content { max-width: 80%; }
+  .message-header { flex-wrap: wrap; gap: 4px; }
+  .input-toolbar { flex-wrap: wrap; gap: 8px; }
+}
+@media (max-width: 480px) {
+  .group-chat-panel { height: 350px; }
+  .message-content { max-width: 85%; }
+  .message-item { gap: 6px; }
+  .message-avatar :deep(.el-avatar) { width: 28px !important; height: 28px !important; }
+  .text-message { padding: 8px 10px; font-size: 13px; }
 }
 </style>

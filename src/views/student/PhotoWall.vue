@@ -273,4 +273,15 @@ onBeforeUnmount(() => {
   border-top: 1px solid #f1f5f9;
   padding-top: 8px;
 }
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .photo-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
+@media (max-width: 480px) {
+  .photo-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .photo-wrapper { height: 150px; }
+  .photo-desc { font-size: 13px; }
+}
 </style>

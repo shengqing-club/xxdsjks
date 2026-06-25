@@ -423,4 +423,15 @@ onMounted(fetchData)
 .batch-info strong { color: #1a56db; }
 .table-card { border-radius: 8px; }
 .table-card :deep(.el-card__body) { padding: 0; }
+
+@media (max-width: 768px) {
+  .all-students-page { max-width: 100%; }
+  .search-bar { flex-direction: column; align-items: stretch; }
+  .search-input { min-width: 100%; }
+  .result-count { margin-left: 0; text-align: center; }
+  .batch-bar { flex-wrap: wrap; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .table-card :deep(.el-table) { min-width: 700px; }
+  .all-students-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 500px; }
+}
 </style>

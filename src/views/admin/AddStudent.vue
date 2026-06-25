@@ -223,4 +223,13 @@ onMounted(() => {
 .submit-btn {
   min-width: 100px;
 }
+
+@media (max-width: 768px) {
+  .add-student-page { max-width: 100%; padding: 0 8px; }
+  .form-card :deep(.el-card__body) { padding: 20px 16px; }
+  .student-form { max-width: 100%; }
+  .student-form :deep(.el-form-item__label) { float: none; display: block; text-align: left; padding-bottom: 4px; }
+  .student-form :deep(.el-form-item__content) { margin-left: 0 !important; }
+  .student-form :deep(.el-input-number) { width: 100% !important; }
+}
 </style>

@@ -214,4 +214,15 @@ const handleSubmit = async () => {
   border-radius: 8px;
   height: 44px;
 }
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .form-card { max-width: 100%; }
+  .form-card :deep(.el-card__body) { padding: 20px; }
+  .page-header h2 { font-size: 18px; }
+}
+@media (max-width: 480px) {
+  .form-card :deep(.el-card__body) { padding: 16px; }
+  .page-header h2 { font-size: 16px; }
+}
 </style>

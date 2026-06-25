@@ -362,4 +362,18 @@ onMounted(fetchData)
 .table-card { border-radius: 8px; }
 .table-card :deep(.el-card__body) { padding: 0; }
 .pagination-wrapper { padding: 14px 20px; display: flex; justify-content: flex-end; }
+
+@media (max-width: 768px) {
+  .grade-page { max-width: 100%; }
+  .page-header { flex-direction: column; }
+  .header-actions { width: 100%; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar .el-input,
+  .toolbar .el-select { width: 100% !important; }
+  .result-count { margin-left: 0; text-align: center; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .table-card :deep(.el-table) { min-width: 700px; }
+  .pagination-wrapper { justify-content: center; }
+  .grade-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 520px; }
+}
 </style>

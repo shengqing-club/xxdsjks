@@ -209,8 +209,20 @@ const resetForm = () => {
 const handleAdd = () => { resetForm(); isEdit.value = false; dialogVisible.value = true }
 
 const handleEdit = (row) => {
+  // exam_date 可能是 Date 对象（mysql2 自动解析），需转为 YYYY-MM-DD 字符串
+  // 使用本地时间而非 UTC，避免时区偏移导致日期少一天
+  const rawDate = row.exam_date
+  let examDateStr = ''
+  if (rawDate instanceof Date) {
+    const y = rawDate.getFullYear()
+    const m = String(rawDate.getMonth() + 1).padStart(2, '0')
+    const d = String(rawDate.getDate()).padStart(2, '0')
+    examDateStr = `${y}-${m}-${d}`
+  } else if (typeof rawDate === 'string') {
+    examDateStr = rawDate.substring(0, 10)
+  }
   form.value = {
-    id: row.id, courseName: row.course_name, examDate: row.exam_date,
+    id: row.id, courseName: row.course_name, examDate: examDateStr,
     examTime: row.exam_time, duration: row.duration, location: row.location,
     classNames: [row.class_name], description: row.description || ''
   }
@@ -326,4 +338,16 @@ onMounted(fetchData)
 .past-date { color: #94a3b8; text-decoration: line-through; }
 
 .batch-hint { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #d97706; background: #fffbeb; padding: 10px 14px; border-radius: 6px; }
+
+@media (max-width: 768px) {
+  .exam-page { max-width: 100%; }
+  .page-header { flex-direction: column; }
+  .header-actions { width: 100%; flex-wrap: wrap; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar .el-select { width: 100% !important; }
+  .result-count { margin-left: 0; text-align: center; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .table-card :deep(.el-table) { min-width: 800px; }
+  .exam-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 560px; }
+}
 </style>

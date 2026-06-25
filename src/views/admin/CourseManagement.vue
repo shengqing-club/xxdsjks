@@ -164,4 +164,13 @@ onMounted(loadCourses)
   display: flex;
   gap: 8px;
 }
+
+@media (max-width: 768px) {
+  .course-management { padding: 12px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .header-actions { width: 100%; flex-wrap: wrap; }
+  .course-management :deep(.el-table) { min-width: 600px; }
+  .course-management :deep(.el-table__body-wrapper) { overflow-x: auto; }
+  .course-management :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 500px; }
+}
 </style>

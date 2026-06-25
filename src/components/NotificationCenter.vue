@@ -2,10 +2,10 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
-import { getNotifications, getUnreadCount, markNotificationRead } from '../api/chat'
+import { getNotifications, getUnreadCount, markAsRead, markAllAsRead } from '../api/notification'
 import { useAuth } from '../stores/auth'
 
-const { studentId } = useAuth()
+useAuth()
 
 const visible = ref(false)
 const notifications = ref([])
@@ -14,8 +14,8 @@ const unreadCount = ref(0)
 const fetchNotifications = async () => {
   try {
     const [notiRes, countRes] = await Promise.all([
-      getNotifications(studentId.value),
-      getUnreadCount(studentId.value)
+      getNotifications(),
+      getUnreadCount()
     ])
     notifications.value = notiRes.data || notiRes || []
     unreadCount.value = countRes.data?.count || 0
@@ -25,10 +25,22 @@ const fetchNotifications = async () => {
 const handleRead = async (noti) => {
   if (noti.is_read) return
   try {
-    await markNotificationRead(noti.id)
+    await markAsRead(noti.id)
     noti.is_read = true
     unreadCount.value = Math.max(0, unreadCount.value - 1)
   } catch {}
+}
+
+const handleReadAll = async () => {
+  if (!unreadCount.value) return
+  try {
+    await markAllAsRead()
+    notifications.value.forEach(n => n.is_read = true)
+    unreadCount.value = 0
+    ElMessage.success('全部标记已读')
+  } catch {
+    ElMessage.error('标记失败')
+  }
 }
 
 const toggleVisible = () => {
@@ -65,7 +77,12 @@ onMounted(() => {
       <div class="noti-pop">
         <div class="noti-header">
           <strong>消息通知</strong>
-          <span class="noti-count">{{ unreadCount }} 条未读</span>
+          <div class="noti-header-right">
+            <el-button v-if="unreadCount" link type="primary" size="small" @click.stop="handleReadAll">
+              一键已读
+            </el-button>
+            <span class="noti-count">{{ unreadCount }} 条未读</span>
+          </div>
         </div>
         <div class="noti-list">
           <div v-if="!notifications.length" class="noti-empty">暂无通知</div>
@@ -92,6 +109,7 @@ onMounted(() => {
 .noti-btn:hover { background: rgba(255,255,255,0.25); }
 .noti-pop { max-height: 400px; }
 .noti-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 0 12px; border-bottom: 1px solid #e5e7eb; margin-bottom: 8px; }
+.noti-header-right { display: flex; align-items: center; gap: 8px; }
 .noti-count { font-size: 12px; color: #1a56db; }
 .noti-list { max-height: 320px; overflow-y: auto; }
 .noti-empty { text-align: center; color: #94a3b8; font-size: 13px; padding: 24px 0; }
@@ -103,4 +121,8 @@ onMounted(() => {
 .noti-content { font-size: 12px; color: #64748b; margin: 2px 0; line-height: 1.4; }
 .noti-time { font-size: 11px; color: #94a3b8; }
 .noti-dot { position: absolute; top: 14px; right: 12px; width: 8px; height: 8px; border-radius: 50%; background: #1a56db; }
+
+@media (max-width: 768px) {
+  .noti-wrapper :deep(.el-popover) { width: calc(100vw - 32px) !important; max-width: 360px; }
+}
 </style>

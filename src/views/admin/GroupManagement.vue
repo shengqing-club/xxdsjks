@@ -557,4 +557,19 @@ onMounted(() => {
   font-size: 18px;
   color: #1a56db;
 }
+
+@media (max-width: 768px) {
+  .group-management-page { padding: 0 4px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .filter-bar { flex-direction: column; align-items: stretch; }
+  .filter-bar .el-select { width: 100% !important; }
+  .filter-bar .el-radio-group { margin-left: 0; }
+  .group-management-page > .el-table { min-width: 700px; }
+  .group-management-page > .el-table .el-table__body-wrapper { overflow-x: auto; }
+  .stats-panel .el-table { min-width: 600px; }
+  .stats-panel .el-table .el-table__body-wrapper { overflow-x: auto; }
+  .group-management-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 700px; }
+  .group-management-page :deep(.el-dialog .el-row) { flex-direction: column; }
+  .group-management-page :deep(.el-dialog .el-col) { width: 100% !important; max-width: 100% !important; }
+}
 </style>

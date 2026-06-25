@@ -165,5 +165,15 @@ onMounted(() => { fetchData(); fetchMajors() })
 .rank-other { color: #94a3b8; }
 .table-card { border-radius: 8px; }
 .table-card :deep(.el-card__body) { padding: 0; }
+
+@media (max-width: 768px) {
+  .ranking-page { max-width: 100%; }
+  .filter-row { flex-direction: column; align-items: stretch; }
+  .filter-row .el-select { width: 100% !important; }
+  .result-count { margin-left: 0; text-align: center; }
+  .top3-row :deep(.el-col) { max-width: 100% !important; flex: 0 0 100% !important; margin-bottom: 12px; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .table-card :deep(.el-table) { min-width: 700px; }
+}
 </style>
 

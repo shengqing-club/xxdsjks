@@ -273,4 +273,14 @@ onMounted(() => {
 .font-kai {
   font-family: 'KaiTi', 'STKaiti', '楷体', 'Noto Serif CJK SC', serif;
 }
+
+@media (max-width: 768px) {
+  .site-settings-page { padding: 0 4px; }
+  .settings-form { max-width: 100%; }
+  .settings-form :deep(.el-form-item__label) { float: none; display: block; text-align: left; padding-bottom: 4px; }
+  .settings-form :deep(.el-form-item__content) { margin-left: 0 !important; }
+  .settings-form :deep(.el-radio-group) { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fullscreen-preview { height: 160px; padding: 16px; }
+  .fullscreen-text { font-size: 16px; letter-spacing: 2px; }
+}
 </style>

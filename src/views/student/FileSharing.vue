@@ -132,7 +132,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled, Download, Document, Picture, VideoPlay, Headset } from '@element-plus/icons-vue'
 import { useAuth } from '../../stores/auth'
-import { getFiles, uploadFile, uploadFileChunked, downloadFile, getStudentUploadSetting } from '../../api/file'
+import { getFiles, uploadFile, downloadFile, getStudentUploadSetting } from '../../api/file'
 
 const { displayName, studentId } = useAuth()
 
@@ -192,19 +192,16 @@ const submitUpload = async () => {
       uploaderName: displayName.value || '学生'
     }
 
-    if (rawFile.size > 5 * 1024 * 1024) {
-      await uploadFileChunked(rawFile, uploadOptions)
-    } else {
-      const formData = new FormData()
-      formData.append('file', rawFile)
-      formData.append('originalFilename', uploadFileList.value[0].name)
-      formData.append('uploaderRole', 'student')
-      formData.append('uploaderId', studentId.value || '')
-      formData.append('uploaderName', displayName.value || '学生')
-      formData.append('category', uploadForm.value.category)
-      formData.append('description', uploadForm.value.description)
-      await uploadFile(formData)
-    }
+    // 统一单次上传（服务器配置足够，不再分片）
+    const formData = new FormData()
+    formData.append('file', rawFile)
+    formData.append('originalFilename', uploadFileList.value[0].name)
+    formData.append('uploaderRole', 'student')
+    formData.append('uploaderId', studentId.value || '')
+    formData.append('uploaderName', displayName.value || '学生')
+    formData.append('category', uploadForm.value.category)
+    formData.append('description', uploadForm.value.description)
+    await uploadFile(formData)
     ElMessage.success('上传成功')
     uploadDialogVisible.value = false
     uploadFileList.value = []
@@ -234,7 +231,20 @@ const formatSize = (bytes) => {
   return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i]
 }
 
-const formatTime = (t) => t ? t.replace('T', ' ').substring(0, 16) : ''
+const formatTime = (t) => {
+  if (!t) return ''
+  try {
+    const d = new Date(t)
+    if (isNaN(d.getTime())) return String(t).substring(0, 16)
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0') + ' ' +
+      String(d.getHours()).padStart(2, '0') + ':' +
+      String(d.getMinutes()).padStart(2, '0')
+  } catch (e) {
+    return String(t).substring(0, 16)
+  }
+}
 
 const getFileIcon = (type) => {
   if (!type) return 'Document'
@@ -290,4 +300,15 @@ onMounted(() => {
 .name-text { font-weight: 500; color: #1e293b; word-break: break-all; }
 .upload-text { margin-top: 8px; font-size: 14px; color: #94a3b8; }
 .upload-text em { color: #1a56db; font-style: normal; }
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .result-count { margin-left: 0; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .page-header h2 { font-size: 18px; }
+}
+@media (max-width: 480px) {
+  .page-header h2 { font-size: 16px; }
+}
 </style>

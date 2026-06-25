@@ -138,4 +138,16 @@ onMounted(() => {
   display: flex;
   gap: 8px;
 }
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .student-groups-page :deep(.el-col) { max-width: 50% !important; flex: 0 0 50% !important; }
+  .student-groups-page :deep(.el-col:nth-child(3n+1):last-child) { max-width: 100% !important; flex: 0 0 100% !important; }
+  .group-actions { flex-direction: column; }
+  .page-title { font-size: 18px; }
+}
+@media (max-width: 480px) {
+  .student-groups-page :deep(.el-col) { max-width: 100% !important; flex: 0 0 100% !important; }
+  .page-title { font-size: 16px; }
+}
 </style>

@@ -195,4 +195,16 @@ onMounted(() => {
 .result-count strong { color: #1a56db; font-weight: 600; }
 .table-card { border-radius: 8px; }
 .table-card :deep(.el-card__body) { padding: 0; }
+
+@media (max-width: 768px) {
+  .class-page { max-width: 100%; }
+  .page-header { flex-direction: column; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar .el-select,
+  .toolbar .el-input { width: 100% !important; }
+  .result-count { margin-left: 0; text-align: center; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .table-card :deep(.el-table) { min-width: 600px; }
+  .class-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 500px; }
+}
 </style>

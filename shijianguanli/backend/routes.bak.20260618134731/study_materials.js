@@ -1,0 +1,383 @@
+import { Router } from 'express'
+import multer from 'multer'
+import pool from '../db.js'
+import { authMiddleware, adminMiddleware } from '../middleware/auth.js'
+import { createChunkedDownloadHandler, createStreamingDownloadHandler } from '../utils/chunkedDownload.js'
+import { decodeMultipartFilename } from '../utils/decodeFilename.js'
+import crypto from 'crypto'
+
+const router = Router()
+router.use(authMiddleware)
+
+// 使用 memoryStorage（文件存储在内存中，适合数据库 LONGBLOB 存储）
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
+
+// ========== 分片上传 ==========
+
+// 预创建表（启动时执行一次）
+pool.query(`
+  CREATE TABLE IF NOT EXISTS upload_sessions (
+    upload_id TEXT PRIMARY KEY,
+    file_name TEXT, file_size BIGINT, file_type TEXT, total_chunks INT, received_chunks INT DEFAULT 0,
+    title TEXT, course_name TEXT, class_name TEXT, uploader_id TEXT, uploader_name TEXT, uploader_role TEXT,
+    version_group TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )
+`).catch(() => {})
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS upload_chunks (
+    upload_id TEXT, chunk_index INT, chunk_data LONGBLOB, PRIMARY KEY (upload_id, chunk_index)
+  )
+`).catch(() => {})
+
+// 初始化分片上传
+router.post('/upload/chunked/init', async (req, res) => {
+  try {
+    const { fileName, fileSize, fileType, totalChunks, title, course_name, class_name, version_group } = req.body
+    if (!fileName || !totalChunks) return res.status(400).json({ message: '参数不完整' })
+
+    const uploaderId = req.user.studentId || req.user.username
+    const uploaderName = req.user.name || uploaderId
+    const uploaderRole = req.user.studentId ? 'student' : 'admin'
+
+    const uploadId = crypto.randomBytes(12).toString('hex')
+
+    await pool.query(
+      `INSERT INTO upload_sessions (upload_id, file_name, file_size, file_type, total_chunks, title, course_name, class_name, uploader_id, uploader_name, uploader_role, version_group)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [uploadId, fileName, fileSize, fileType, parseInt(totalChunks), title || fileName, course_name || null, class_name || null, uploaderId, uploaderName, uploaderRole, version_group || null]
+    )
+
+    res.json({ uploadId, chunkSize: 4 * 1024 * 1024 })
+  } catch (e) {
+    res.status(500).json({ message: '初始化失败: ' + e.message })
+  }
+})
+
+// 完成分片上传（在内存中合并分片，MySQL 不支持 bytea_agg）
+router.post('/upload/chunked/:uploadId/complete', async (req, res) => {
+  try {
+    const { uploadId } = req.params
+
+    const session = await pool.query('SELECT * FROM upload_sessions WHERE upload_id = ?', [uploadId])
+    if (session.rows.length === 0) return res.status(404).json({ message: '上传会话不存在' })
+    const s = session.rows[0]
+
+    if (s.received_chunks < s.total_chunks) {
+      return res.status(400).json({ message: `分片不完整：${s.received_chunks}/${s.total_chunks}` })
+    }
+
+    // MySQL 不支持 bytea_agg，在内存中合并分片
+    const chunksResult = await pool.query(
+      'SELECT chunk_data FROM upload_chunks WHERE upload_id = ? ORDER BY chunk_index',
+      [uploadId]
+    )
+    const chunks = chunksResult.rows.map(r => r.chunk_data).filter(Boolean)
+    if (chunks.length === 0) return res.status(500).json({ message: '合并数据失败' })
+
+    const mergedData = Buffer.concat(chunks.map(c => Buffer.isBuffer(c) ? c : Buffer.from(c)))
+
+    // 生成版本组 ID（首次上传）
+    const versionGroup = s.version_group || `vg-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`
+    // 计算版本号
+    let versionNumber = 1
+    if (s.version_group) {
+      const verRes = await pool.query(
+        'SELECT MAX(version_number) as max_ver FROM study_materials WHERE version_group = ?',
+        [s.version_group]
+      )
+      versionNumber = (verRes.rows[0].max_ver || 0) + 1
+      // 将旧版本标记为非最新
+      await pool.query(
+        'UPDATE study_materials SET is_latest = 0 WHERE version_group = ?',
+        [s.version_group]
+      )
+    }
+
+    // 插入到 study_materials
+    const result = await pool.query(
+      `INSERT INTO study_materials
+        (title, file_url, file_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, file_data, version_group, version_number, is_latest)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [s.title, `stored-in-db://${s.file_name}`, s.file_name, s.file_size, s.file_type, s.course_name, s.class_name, s.uploader_id, s.uploader_name, s.uploader_role, mergedData, versionGroup, versionNumber, 1]
+    )
+
+    // 发通知
+    if (s.class_name) {
+      try {
+        const students = await pool.query('SELECT student_id FROM students WHERE class_name = ?', [s.class_name])
+        if (students.rows.length > 0) {
+          for (const st of students.rows) {
+            await pool.query(
+              `INSERT INTO notifications (receiver_id, title, content, type)
+               VALUES (?, ?, ?, 'material')`,
+              [st.student_id, `新复习资料: ${s.title}`, `课程「${s.course_name || '通用'}」上传了新的复习资料，请及时下载复习。`]
+            )
+          }
+        }
+      } catch (e) { /* 忽略通知发送失败 */ }
+    }
+
+    // 清理临时数据
+    await pool.query('DELETE FROM upload_chunks WHERE upload_id = ?', [uploadId])
+    await pool.query('DELETE FROM upload_sessions WHERE upload_id = ?', [uploadId])
+
+    const insertedId = result.insertId
+    const newRow = await pool.query('SELECT * FROM study_materials WHERE id = ?', [insertedId])
+    res.status(201).json(newRow.rows[0])
+  } catch (e) {
+    res.status(500).json({ message: '合并失败: ' + e.message })
+  }
+})
+
+// 上传单个分片
+router.post('/upload/chunked/:uploadId/:chunkIndex', upload.single('chunk'), async (req, res) => {
+  try {
+    const { uploadId, chunkIndex } = req.params
+    if (!req.file) return res.status(400).json({ message: '无文件数据' })
+
+    await pool.query(
+      'INSERT INTO upload_chunks (upload_id, chunk_index, chunk_data) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE chunk_data = ?',
+      [uploadId, parseInt(chunkIndex), req.file.buffer, req.file.buffer]
+    )
+
+    await pool.query(
+      'UPDATE upload_sessions SET received_chunks = received_chunks + 1 WHERE upload_id = ?',
+      [uploadId]
+    )
+
+    res.json({ chunkIndex: parseInt(chunkIndex) })
+  } catch (e) {
+    res.status(500).json({ message: '分片上传失败' })
+  }
+})
+
+// 确保 study_materials 表有必要的列
+const ensureColumns = async () => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name='study_materials' AND column_name='file_data' AND table_schema = DATABASE()`
+    )
+    if (rows.length === 0) {
+      await pool.query('ALTER TABLE study_materials ADD COLUMN file_data LONGBLOB')
+      console.log('已添加 study_materials.file_data 列')
+    }
+    // 添加版本相关列
+    const verRows = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name='study_materials' AND column_name='version_group' AND table_schema = DATABASE()`
+    )
+    if (verRows.rows.length === 0) {
+      await pool.query('ALTER TABLE study_materials ADD COLUMN version_group TEXT')
+      await pool.query('ALTER TABLE study_materials ADD COLUMN version_number INT DEFAULT 1')
+      await pool.query('ALTER TABLE study_materials ADD COLUMN is_latest TINYINT(1) DEFAULT 1')
+      console.log('已添加版本管理列')
+    }
+  } catch (e) {
+    // 忽略列已存在等错误
+  }
+}
+ensureColumns().catch(() => {})
+
+// 获取复习资料列表（支持分页和搜索）
+router.get('/', async (req, res) => {
+  try {
+    const { class_name, course_name, keyword, page, pageSize } = req.query
+    let whereSql = 'WHERE 1=1'
+    const params = []
+    let idx = 1
+    if (class_name) {
+      whereSql += ` AND class_name = ?`
+      params.push(class_name)
+    }
+    if (course_name) {
+      whereSql += ` AND course_name = ?`
+      params.push(course_name)
+    }
+    if (keyword) {
+      whereSql += ` AND (file_name LIKE ? OR title LIKE ?)`
+      params.push(`%${keyword}%`, `%${keyword}%`)
+    }
+
+    // 总数
+    const countResult = await pool.query(`SELECT COUNT(*) as total FROM study_materials ${whereSql}`, params)
+    const total = parseInt(countResult.rows[0].total)
+
+    // 分页查询 - 复制params用于分页，避免修改原数组
+    const queryParams = [...params]
+    let sql = `SELECT id, title, COALESCE(file_name, title, '未命名') as original_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, version_group, version_number, is_latest, created_at FROM study_materials ${whereSql} ORDER BY created_at DESC`
+    if (page && pageSize) {
+      const offset = (parseInt(page) - 1) * parseInt(pageSize)
+      sql += ` LIMIT ? OFFSET ?`
+      queryParams.push(parseInt(pageSize), offset)
+    }
+    const result = await pool.query(sql, queryParams)
+    res.json({ list: result.rows, total })
+  } catch (e) {
+    res.status(500).json({ message: '获取复习资料失败' })
+  }
+})
+
+// 上传复习资料（存入数据库）
+router.post('/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: '请选择文件' })
+
+    const originalName = decodeMultipartFilename(req.file.originalname)
+
+    // 危险文件校验
+    const ext = originalName.split('.').pop().toLowerCase()
+    const dangerousExts = ['exe', 'dll', 'bat', 'cmd', 'sh', 'msi', 'scr', 'vbs', 'js', 'jar', 'apk', 'ipa']
+    if (dangerousExts.includes(ext)) {
+      return res.status(400).json({ message: `禁止上传危险文件类型：.${ext}` })
+    }
+
+    const { title, course_name, class_name } = req.body
+    if (!title) return res.status(400).json({ message: '请输入资料标题' })
+
+    const uploaderId = req.user.studentId || req.user.username
+    const uploaderName = req.user.name || uploaderId
+    const uploaderRole = req.user.studentId ? 'student' : 'admin'
+
+    const result = await pool.query(
+      `INSERT INTO study_materials
+        (title, file_url, file_name, file_size, file_type, course_name, class_name, uploader_id, uploader_name, uploader_role, file_data)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        title,
+        `stored-in-db://${originalName}`,
+        originalName,
+        req.file.size,
+        req.file.mimetype,
+        course_name || null,
+        class_name || null,
+        uploaderId,
+        uploaderName,
+        uploaderRole,
+        req.file.buffer
+      ]
+    )
+
+    // 如果指定了班级，给该班所有学生发通知
+    if (class_name) {
+      try {
+        const students = await pool.query(
+          'SELECT student_id FROM students WHERE class_name = ?',
+          [class_name]
+        )
+        if (students.rows.length > 0) {
+          for (const st of students.rows) {
+            await pool.query(
+              `INSERT INTO notifications (receiver_id, title, content, type)
+               VALUES (?, ?, ?, 'material')`,
+              [st.student_id, `新复习资料: ${title}`, `课程「${course_name || '通用'}」上传了新的复习资料，请及时下载复习。`]
+            )
+          }
+        }
+      } catch (e) {
+        console.error('复习资料通知发送失败:', e)
+      }
+    }
+
+    const insertedId = result.insertId
+    const newRow = await pool.query('SELECT * FROM study_materials WHERE id = ?', [insertedId])
+    res.status(201).json(newRow.rows[0])
+  } catch (e) {
+    res.status(500).json({ message: '上传失败: ' + e.message })
+  }
+})
+
+// 下载复习资料（从数据库读取）
+router.get('/download/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM study_materials WHERE id = ?', [req.params.id])
+    if (result.rows.length === 0) return res.status(404).json({ message: '资料不存在' })
+    const material = result.rows[0]
+
+    if (!material.file_data) {
+      return res.status(404).json({ message: '文件内容已丢失' })
+    }
+
+    // 确保 file_data 是 Buffer
+    const fileBuffer = Buffer.isBuffer(material.file_data)
+      ? material.file_data
+      : Buffer.from(material.file_data)
+
+    // 超过 2MB 的文件禁止直接下载，前端应使用分片下载
+    if (fileBuffer.length > 2 * 1024 * 1024) {
+      return res.status(413).json({
+        message: '文件过大，请使用分片下载',
+        fileSize: fileBuffer.length,
+        useChunked: true
+      })
+    }
+
+    res.json({
+      base64: fileBuffer.toString('base64'),
+      fileName: material.file_name || 'download',
+      fileType: material.file_type || 'application/octet-stream',
+      fileSize: fileBuffer.length
+    })
+  } catch (e) {
+    res.status(500).json({ message: '下载失败' })
+  }
+})
+
+// 分片下载复习资料（兼容 Netlify 6MB 限制）
+router.get('/download/:id/chunk', createChunkedDownloadHandler({
+  tableName: 'study_materials',
+  idColumn: 'id',
+  dataColumn: 'file_data',
+  nameColumn: 'file_name',
+  typeColumn: 'file_type'
+}))
+
+// 流式下载复习资料（非 Serverless 环境，无 base64 开销）
+router.get('/download/:id/stream', createStreamingDownloadHandler({
+  tableName: 'study_materials',
+  idColumn: 'id',
+  dataColumn: 'file_data',
+  nameColumn: 'file_name',
+  typeColumn: 'file_type'
+}))
+
+// 获取版本历史
+router.get('/:id/versions', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT version_group FROM study_materials WHERE id = ?', [req.params.id])
+    if (result.rows.length === 0) return res.status(404).json({ message: '资料不存在' })
+    const vg = result.rows[0].version_group
+    if (!vg) return res.json({ versions: [] })
+
+    const versions = await pool.query(
+      `SELECT id, title, file_name, file_size, file_type, version_number, is_latest, uploader_name, created_at
+       FROM study_materials WHERE version_group = ? ORDER BY version_number DESC`,
+      [vg]
+    )
+    res.json({ versions: versions.rows })
+  } catch (e) {
+    res.status(500).json({ message: '获取版本历史失败' })
+  }
+})
+
+// 删除复习资料
+router.delete('/:id', async (req, res) => {
+  try {
+    const userId = req.user.studentId || req.user.username
+    const isAdmin = !!req.user.username && !req.user.studentId
+
+    const result = await pool.query('SELECT * FROM study_materials WHERE id = ?', [req.params.id])
+    if (result.rows.length === 0) return res.status(404).json({ message: '资料不存在' })
+
+    const material = result.rows[0]
+    if (material.uploader_id !== userId && !isAdmin) {
+      return res.status(403).json({ message: '无权删除此资料' })
+    }
+
+    await pool.query('DELETE FROM study_materials WHERE id = ?', [req.params.id])
+    res.json({ message: '删除成功' })
+  } catch (e) {
+    res.status(500).json({ message: '删除失败' })
+  }
+})
+
+export default router

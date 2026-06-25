@@ -8,10 +8,18 @@
 /** 从任意格式（ISO datetime / 纯日期字符串）提取 YYYY-MM-DD */
 export function normalizeDate(rawDate) {
   if (!rawDate) return ''
-  const s = String(rawDate)
+  const s = String(rawDate).trim()
   // 已是纯日期格式
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-  // ISO datetime → 取前10位
+  // ISO datetime（含时区）：先尝试用 Date 解析，再取本地日期
+  const d = new Date(s)
+  if (!isNaN(d.getTime())) {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  // 兜底：取前10位
   return s.slice(0, 10)
 }
 
@@ -42,8 +50,6 @@ export function formatTimeRange(exam) {
 
 // ===== 考试状态 =====
 
-const now = new Date()
-
 /** 获取中国时区的当天日期字符串 YYYY-MM-DD（避免 toISOString 的 UTC 偏移问题） */
 function getTodayStrCST() {
   const d = new Date()
@@ -52,7 +58,6 @@ function getTodayStrCST() {
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
-const todayStr = getTodayStrCST()
 
 /**
  * 获取考试状态标签
@@ -63,6 +68,9 @@ export function getExamStatus(exam) {
   const dateStr = normalizeDate(exam.exam_date)
   if (!dateStr) return { tag: '未知', type: 'info' }
 
+  const todayStr = getTodayStrCST()
+  const now = new Date()
+
   // 已过日期
   if (dateStr < todayStr) return { tag: '已结束', type: 'info' }
 
@@ -70,12 +78,12 @@ export function getExamStatus(exam) {
   if (dateStr === todayStr) {
     const timeStr = exam.exam_time || '00:00'
     const [h, m] = timeStr.split(':').map(Number)
-    if (isNaN(h) || isNaN(m)) return { tag: '今天', type: 'danger' }
+    if (isNaN(h) || isNaN(m)) return { tag: '今天待考', type: 'danger' }
     const startMs = h * 60 + m
     const endMs = startMs + (Number(exam.duration) || 120)
     const curMs = now.getHours() * 60 + now.getMinutes()
     if (curMs >= startMs && curMs < endMs) return { tag: '考试中', type: 'danger' }
-    if (curMs < startMs) return { tag: '今天', type: 'danger' }
+    if (curMs < startMs) return { tag: '今天待考', type: 'danger' }
     return { tag: '已结束', type: 'info' }
   }
 
@@ -89,17 +97,18 @@ export function getExamStatus(exam) {
 
 /** 是否已过（向后兼容） */
 export function isPast(dateStr) {
-  return normalizeDate(dateStr) < todayStr
+  return normalizeDate(dateStr) < getTodayStrCST()
 }
 
 /** 是否是今天 */
 export function isToday(dateStr) {
-  return normalizeDate(dateStr) === todayStr
+  return normalizeDate(dateStr) === getTodayStrCST()
 }
 
 /** 是否在 N 天内 */
 export function isWithinDays(dateStr, days) {
   const d = normalizeDate(dateStr)
+  const todayStr = getTodayStrCST()
   if (!d || d < todayStr) return false
   const examDate = new Date(d + 'T12:00:00')
   const todayDate = new Date(todayStr + 'T12:00:00')

@@ -26,7 +26,10 @@
       </el-table-column>
       <el-table-column label="置顶" width="70" align="center">
         <template #default="{ row }">
-          <el-switch v-model="row.pinned" @change="handlePin(row)" />
+          <el-switch
+            :model-value="!!row.pinned"
+            @change="(val) => handlePin(row, val)"
+          />
         </template>
       </el-table-column>
       <el-table-column prop="created_at" label="发布时间" width="160">
@@ -118,13 +121,14 @@ async function openPost(post) {
   }
 }
 
-async function handlePin(post) {
+async function handlePin(post, newVal) {
+  const pinned = !!newVal
   try {
-    await togglePinPost(post.id, post.pinned)
-    ElMessage.success(post.pinned ? '已置顶' : '已取消置顶')
+    await togglePinPost(post.id, pinned)
+    post.pinned = pinned ? 1 : 0
+    ElMessage.success(pinned ? '已置顶' : '已取消置顶')
   } catch (e) {
     ElMessage.error('操作失败')
-    post.pinned = !post.pinned
   }
 }
 
@@ -159,4 +163,15 @@ onMounted(() => { loadPosts() })
 .comment-header { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #999; margin-bottom: 4px; }
 .comment-author { font-weight: 500; color: #333; }
 .comment-content { font-size: 14px; color: #555; line-height: 1.5; }
+
+@media (max-width: 768px) {
+  .forum-admin { padding: 12px; }
+  .forum-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .forum-actions { width: 100%; flex-wrap: wrap; }
+  .forum-actions .el-select,
+  .forum-actions .el-input { width: 100% !important; }
+  .forum-admin > .el-table { min-width: 700px; }
+  .forum-admin > .el-table .el-table__body-wrapper { overflow-x: auto; }
+  .forum-admin :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 700px; }
+}
 </style>

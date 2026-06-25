@@ -63,6 +63,13 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+// 判断考试日期是否为6月25日（生日）
+const isBirthdayDate = (dateStr) => {
+  if (!dateStr) return false
+  // dateStr could be "2026-06-25" or "6月25日" etc., check for 06-25 or 6-25
+  return /(-|^)0?6-25($|-)/.test(dateStr) || /6月25日/.test(dateStr)
+}
 </script>
 
 <template>
@@ -121,9 +128,10 @@ onMounted(async () => {
     <!-- 考试列表（按日期分组） -->
     <div v-if="groupedExams.length" class="exam-timeline">
       <div v-for="group in groupedExams" :key="group.date" class="exam-day-group">
-        <div class="day-header" :class="{ 'day-today': group.date === todayStr }">
+        <div class="day-header" :class="{ 'day-today': group.date === todayStr, 'birthday-day': isBirthdayDate(group.date) }">
           <el-icon :size="18"><Calendar /></el-icon>
           <span class="day-text">{{ group.displayDate }}</span>
+          <span v-if="isBirthdayDate(group.date)" class="birthday-cake">🎂</span>
           <el-tag size="small" effect="plain" round>{{ group.date }}</el-tag>
         </div>
         <div class="exam-cards">
@@ -132,7 +140,7 @@ onMounted(async () => {
             :key="exam.id"
             shadow="hover"
             class="exam-card"
-            :class="'status-' + getExamStatus(exam).type"
+            :class="['status-' + getExamStatus(exam).type, { 'birthday-exam': isBirthdayDate(group.date) }]"
           >
             <div class="exam-card-body">
               <div class="exam-main">
@@ -234,4 +242,51 @@ onMounted(async () => {
 
 /* Empty */
 .empty-hint { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+
+/* Birthday exam decorations (June 25th) */
+.birthday-day {
+  color: #e75480;
+}
+.birthday-cake {
+  font-size: 22px;
+  animation: cakeBounce 1s ease-in-out infinite;
+  margin-left: 4px;
+}
+.birthday-exam {
+  position: relative;
+  border: 2px solid #ffb6c1 !important;
+  background: linear-gradient(135deg, #fff9e6 0%, #fff0f5 100%) !important;
+}
+.birthday-exam::before {
+  content: '🎂';
+  position: absolute;
+  top: -12px;
+  right: 12px;
+  font-size: 24px;
+  z-index: 1;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+.birthday-exam .exam-course {
+  color: #e75480;
+}
+@keyframes cakeBounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-3px) rotate(-5deg); }
+  75% { transform: translateY(-3px) rotate(5deg); }
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .stats-row :deep(.el-col) { max-width: 50% !important; flex: 0 0 50% !important; }
+  .stats-row :deep(.el-col:last-child) { max-width: 100% !important; flex: 0 0 100% !important; }
+  .exam-meta { flex-direction: column; gap: 6px; }
+  .ongoing-item { flex-wrap: wrap; gap: 8px; }
+  .page-header h2 { font-size: 18px; }
+}
+@media (max-width: 480px) {
+  .stats-row :deep(.el-col) { max-width: 100% !important; flex: 0 0 100% !important; }
+  .exam-title-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .exam-course { font-size: 15px; }
+  .page-header h2 { font-size: 16px; }
+}
 </style>

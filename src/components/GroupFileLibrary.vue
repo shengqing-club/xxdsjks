@@ -176,4 +176,10 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
 }
+
+@media (max-width: 768px) {
+  .library-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .group-file-library :deep(.el-table) { min-width: 500px; }
+  .group-file-library :deep(.el-table__body-wrapper) { overflow-x: auto; }
+}
 </style>

@@ -1,5 +1,6 @@
 import api from './index'
 import { smartDownload } from './utils'
+import { chunkedUpload } from './chunkedUpload'
 
 export function getFiles(category) {
   const params = {}
@@ -9,67 +10,15 @@ export function getFiles(category) {
   return api.get('/files', { params })
 }
 
-export function uploadFile(formData) {
-  return api.post('/files/upload', formData, {
-    timeout: 300000, // 5 分钟
-  })
-}
-
-// 分片上传
-const CHUNK_SIZE = 4 * 1024 * 1024 // 4MB
-const UPLOAD_PARALLEL = 2 // 并行上传数
-
-export async function uploadFileChunked(file, options = {}, onProgress) {
-  const { category, uploaderRole, uploaderId, uploaderName } = options
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-
-  // 1. 初始化
-  const initRes = await api.post('/files/upload/chunked/init', {
-    fileName: file.name,
-    fileSize: file.size,
-    fileType: file.type,
-    totalChunks,
-    category: category || 'general',
-    uploaderRole, uploaderId, uploaderName
-  }, { timeout: 300000 })
-  const { uploadId } = initRes.data
-
-  // 2. 并行上传分片
-  let completedChunks = 0
-  const chunkPromises = []
-
-  for (let i = 0; i < totalChunks; i++) {
-    const start = i * CHUNK_SIZE
-    const end = Math.min(start + CHUNK_SIZE, file.size)
-    const chunk = file.slice(start, end)
-
-    // 控制并发
-    if (chunkPromises.length >= UPLOAD_PARALLEL) {
-      await Promise.race(chunkPromises)
-    }
-
-    const promise = (async (chunkIndex) => {
-      const formData = new FormData()
-      formData.append('chunk', chunk)
-      try {
-        await api.post(`/files/upload/chunked/${uploadId}/${chunkIndex}`, formData, {
-          timeout: 120000 // 2 分钟
-        })
-        completedChunks++
-        if (onProgress) onProgress(Math.round((completedChunks / totalChunks) * 100))
-      } catch (e) {
-        throw new Error(`分片 ${chunkIndex} 上传失败: ${e.message}`)
-      }
-    })(i)
-
-    chunkPromises.push(promise)
+// 分片上传（大文件自动分片，小文件直接上传）
+export function uploadFile(formData, onProgress) {
+  // Extract file and extra fields from FormData
+  const file = formData.get('file')
+  const extraFields = {}
+  for (const [key, val] of formData.entries()) {
+    if (key !== 'file') extraFields[key] = val
   }
-
-  await Promise.all(chunkPromises)
-
-  // 3. 完成合并
-  const completeRes = await api.post(`/files/upload/chunked/${uploadId}/complete`, null, { timeout: 300000 })
-  return completeRes.data
+  return chunkedUpload('/files', file, extraFields, onProgress)
 }
 
 export function deleteFile(id) {

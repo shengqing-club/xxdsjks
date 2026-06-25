@@ -213,4 +213,12 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
 }
+
+@media (max-width: 768px) {
+  .photo-wall-management { padding: 12px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .stats-bar { flex-direction: column; gap: 12px; }
+  .photo-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .photo-wall-management :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 90vw; }
+}
 </style>

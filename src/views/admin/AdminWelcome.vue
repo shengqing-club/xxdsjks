@@ -518,4 +518,24 @@ onUnmounted(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+@media (max-width: 768px) {
+  .welcome-page { max-width: 100%; }
+  .welcome-banner { padding: 24px 20px; }
+  .banner-text .school-name { font-size: 1.6rem; letter-spacing: 2px; }
+  .banner-subtitle { font-size: 0.875rem; }
+  .banner-meta { gap: 12px; }
+  .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .quick-actions { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .stat-card :deep(.el-card__body) { padding: 16px; }
+  .stat-icon { width: 44px; height: 44px; }
+  .stat-icon :deep(.el-icon) { font-size: 22px !important; }
+  .stat-value { font-size: 22px; }
+  .action-card :deep(.el-card__body) { padding: 20px 12px; }
+  .action-icon { width: 52px; height: 52px; }
+  .action-icon :deep(.el-icon) { font-size: 26px !important; }
+  .action-label { font-size: 14px; }
+  .action-desc { font-size: 12px; }
+  .announcement-card :deep(.el-card__body) { padding: 16px; }
+}
 </style>

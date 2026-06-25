@@ -232,4 +232,15 @@ onMounted(fetchData)
 .stat-label { font-size: 13px; color: #94a3b8; }
 .table-card { border-radius: 8px; }
 .table-card :deep(.el-card__body) { padding: 0; }
+
+@media (max-width: 768px) {
+  .reward-page { max-width: 100%; }
+  .page-header { flex-direction: column; }
+  .header-actions { width: 100%; }
+  .stat-row { flex-direction: column; }
+  .stat-item { min-width: 100%; }
+  .table-card :deep(.el-card__body) { overflow-x: auto; }
+  .table-card :deep(.el-table) { min-width: 700px; }
+  .reward-page :deep(.el-dialog) { width: calc(100vw - 32px) !important; max-width: 520px; }
+}
 </style>

@@ -4,8 +4,8 @@ import { useAuth } from '../../stores/auth'
 import { getStudentByStudentId } from '../../api/student'
 import { getGradesByStudent } from '../../api/grade'
 import { getAnnouncements } from '../../api/announcement'
-import { getNotifications, getUnreadCount } from '../../api/notification'
-import { getStudyMaterials, uploadStudyMaterial, uploadStudyMaterialChunked, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
+import { getNotifications, getUnreadCount, markAsRead, deleteNotification } from '../../api/notification'
+import { getStudyMaterials, uploadStudyMaterial, deleteStudyMaterial, downloadStudyMaterial } from '../../api/study_material'
 import { getUpcomingExams } from '../../api/exam'
 import { normalizeDate, formatTimeRange, getExamStatus } from '../../utils/exam'
 import { getScrollingText } from '../../api/settings'
@@ -230,7 +230,43 @@ const handleDownload = async (material) => {
 const uploadDialogVisible = ref(false)
 const notifDetailVisible = ref(false)
 const currentNotif = ref(null)
-const showNotifDetail = (item) => { currentNotif.value = item; notifDetailVisible.value = true }
+const showNotifDetail = async (item) => {
+  currentNotif.value = item
+  notifDetailVisible.value = true
+  // 如果是个人通知且未读，标记已读并更新本地状态
+  if (item.type === 'notification' && !item.is_read) {
+    try {
+      await markAsRead(item.raw.id)
+      // 更新 notifications 原始数组中的已读状态
+      const target = notifications.value.find(n => n.id === item.raw.id)
+      if (target) target.is_read = true
+      // 更新未读计数（不低于 0）
+      unreadCount.value = Math.max(0, unreadCount.value - 1)
+    } catch (e) {
+      // 标记失败不影响详情展示
+    }
+  }
+}
+
+const handleDeleteNotif = async (item, event) => {
+  event.stopPropagation()
+  if (item.type !== 'notification') {
+    ElMessage.warning('系统公告不可删除')
+    return
+  }
+  try {
+    await ElMessageBox.confirm('确定删除这条通知吗？', '提示', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' })
+    await deleteNotification(item.raw.id)
+    // 从原始数组中移除
+    const idx = notifications.value.findIndex(n => n.id === item.raw.id)
+    if (idx > -1) notifications.value.splice(idx, 1)
+    // 更新未读计数
+    if (!item.is_read) unreadCount.value = Math.max(0, unreadCount.value - 1)
+    ElMessage.success('已删除')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('删除失败')
+  }
+}
 const uploadFormRef = ref(null)
 const uploadLoading = ref(false)
 const uploadFile = ref(null)
@@ -279,16 +315,13 @@ const submitUpload = async () => {
     }
     const fileObj = uploadFile.value
 
-    if (fileObj.size > 5 * 1024 * 1024) {
-      await uploadStudyMaterialChunked(fileObj, uploadOptions)
-    } else {
-      const formData = new FormData()
-      formData.append('file', fileObj)
-      formData.append('title', uploadForm.value.title)
-      formData.append('course_name', uploadForm.value.course_name || '')
-      formData.append('class_name', student.value?.class_name || '')
-      await uploadStudyMaterial(formData)
-    }
+    // 统一单次上传（服务器配置足够，不再分片）
+    const formData = new FormData()
+    formData.append('file', fileObj)
+    formData.append('title', uploadForm.value.title)
+    formData.append('course_name', uploadForm.value.course_name || '')
+    formData.append('class_name', student.value?.class_name || '')
+    await uploadStudyMaterial(formData)
     ElMessage.success('上传成功')
     uploadDialogVisible.value = false
     fetchStudyMaterials()
@@ -801,4 +834,29 @@ onUnmounted(() => {
 .notif-detail-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .notif-detail-time { font-size: 13px; color: #94a3b8; }
 .notif-detail-content { font-size: 14px; color: #334155; line-height: 1.8; white-space: pre-wrap; }
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .reward-left { flex-wrap: wrap; }
+  .reward-right { flex-wrap: wrap; gap: 8px; }
+  .ann-left { flex-wrap: wrap; }
+  .ann-date { margin-left: 0; }
+  .mat-left { flex-wrap: wrap; }
+  .mat-right { flex-wrap: wrap; gap: 6px; }
+  .esi-meta { flex-direction: column; gap: 2px; }
+  .esi-sep { display: none; }
+  .ongoing-exam-item { flex-wrap: wrap; gap: 8px; }
+  .exam-reminder-item { flex-wrap: wrap; gap: 6px; }
+  .page-header h2 { font-size: 18px; }
+}
+@media (max-width: 480px) {
+  .reward-item { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .reward-right { margin-left: 0; }
+  .announcement-item { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .material-item { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .mat-right { margin-left: 0; }
+  .exam-schedule-item { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .esi-status { margin-left: 0; }
+  .page-header h2 { font-size: 16px; }
+}
 </style>

@@ -360,4 +360,18 @@ onMounted(() => {
   justify-content: flex-end;
   margin-top: 16px;
 }
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .filter-bar { flex-direction: column; align-items: flex-start; }
+  .filter-bar .el-select { width: 100% !important; margin-left: 0 !important; }
+  .filter-bar .el-input { width: 100% !important; margin-left: 0 !important; }
+  .latest-item { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .latest-right { margin-left: 0; }
+  .page-title { font-size: 18px; }
+}
+@media (max-width: 480px) {
+  .page-title { font-size: 16px; }
+  .pagination { justify-content: center; }
+}
 </style>
